@@ -793,13 +793,6 @@ export default function App() {
     );
   };
 
-  const handleSwitchUserRole = (role: UserRole) => {
-    const user = usersList.find((u) => u.role === role) || MOCK_USERS.find((u) => u.role === role);
-    if (user) {
-      setCurrentUser(user);
-    }
-  };
-
   if (!currentUser) {
     return <LoginView onLoginSuccess={(u) => setCurrentUser(u)} />;
   }
@@ -895,8 +888,7 @@ export default function App() {
         simulatedTime={simulatedTime}
         unreadCount={unreadCount}
         onOpenNotifications={() => setNotificationDrawerOpen(true)}
-        onLogout={() => setCurrentUser(null)}
-        onSwitchUser={handleSwitchUserRole}
+        onLogout={() => { void signOut(auth); }}
       />
 
       {/* Test / Simulation Bar */}
