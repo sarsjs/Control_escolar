@@ -90,22 +90,9 @@ export default function App() {
   const [currentSchool, setCurrentSchool] = useState<SchoolInstitution>(schools[0] || INITIAL_SCHOOLS[0]);
   const [usersList, setUsersList] = useState<UserAccount[]>(MOCK_USERS);
 
-  // Session: defaults to Super Admin (Dueño de la App) so user can immediately manage schools and directors
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    const saved = localStorage.getItem('aulacontrol_user');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.role === 'superadmin' || parsed.id === 'usr-superadmin') {
-          return MOCK_USERS[0]; // sarsjs@gmail.com
-        }
-        return parsed;
-      } catch {
-        return MOCK_USERS[0];
-      }
-    }
-    return MOCK_USERS[0]; // Start directly as Dueño (sarsjs@gmail.com)
-  });
+  // Never grant a role from localStorage alone. A session must start at the login screen.
+  // The cached profile is not an authentication credential and can be edited by the browser user.
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
 
   // Master Academic State with Local Storage persistence
   const [orientadores, setOrientadores] = useState<Orientador[]>(MOCK_ORIENTADORES);
