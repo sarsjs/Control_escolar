@@ -92,6 +92,57 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
         </button>
       </div>
 
+      {/* Resumen Principal del Alumno: Asistencias, Faltas y Horario (Requisito Clave) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Card 1: Asistencias */}
+        <div className="bg-white rounded-2xl border border-emerald-200/80 p-4 shadow-2xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Tus Asistencias</span>
+            <div className="flex items-baseline gap-1.5 mt-1">
+              <span className="text-2xl font-black font-mono text-emerald-600">94.1%</span>
+              <span className="text-xs text-slate-500 font-medium">(32/34)</span>
+            </div>
+            <span className="text-[10px] text-emerald-700 font-medium block mt-0.5">Asistencias validadas</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Card 2: Faltas */}
+        <div className="bg-white rounded-2xl border border-rose-200/80 p-4 shadow-2xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-rose-800">Tus Faltas</span>
+            <div className="flex items-baseline gap-1.5 mt-1">
+              <span className="text-2xl font-black font-mono text-rose-600">2</span>
+              <span className="text-xs text-slate-500 font-medium">acumuladas</span>
+            </div>
+            <span className="text-[10px] text-slate-500 block mt-0.5">1 justificada · 1 por revisar</span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Card 3: Horario Escolar Hoy */}
+        <div className="bg-white rounded-2xl border border-indigo-200/80 p-4 shadow-2xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-800">Horario de Hoy</span>
+            <div className="flex items-baseline gap-1.5 mt-1">
+              <span className="text-base font-bold text-slate-900 truncate max-w-[130px] block">
+                {activeClass?.subjectName || 'Matemáticas'}
+              </span>
+            </div>
+            <span className="text-[10px] text-indigo-700 font-mono block mt-0.5">
+              {activeClass?.classroom} · {activeClass?.startTime} - {activeClass?.endTime}
+            </span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+            <Calendar className="w-5 h-5" />
+          </div>
+        </div>
+      </div>
+
       {/* Orientador Asignado */}
       {orientador && (
         <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-4 flex items-center justify-between gap-3 text-xs">

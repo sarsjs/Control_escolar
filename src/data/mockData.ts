@@ -7,6 +7,7 @@ import {
   GroupScheduleItem,
   CampusZoneLocation,
   SystemNotification,
+  SchoolInstitution,
 } from '../types';
 
 export const CAMPUS_AERIAL_IMAGE = '/src/assets/images/school_campus_aerial_1792684658663.jpg';
@@ -14,10 +15,80 @@ export const CLASSROOM_IMAGE = '/src/assets/images/classroom_interior_1792684659
 export const SOFIA_AVATAR = '/src/assets/images/student_avatar_sofia_1792684658112.jpg';
 export const ROBERTO_AVATAR = '/src/assets/images/teacher_avatar_roberto_1792684659299.jpg';
 
+export const INITIAL_SCHOOLS: SchoolInstitution[] = [
+  {
+    id: 'sch-epo-264',
+    name: 'Escuela Preparatoria Oficial N. 264',
+    slug: 'epo-264',
+    logo: '', // empty to use the official wolf vector emblem or custom logo
+    cct: '15EBH0264X',
+    address: 'Av. Morelos Poniente 305, San Jerónimo Chicahualco, Metepec, Estado de México',
+    entryTime: '07:00 AM',
+    latitude: 19.2842,
+    longitude: -99.5936,
+    geofenceRadiusMeters: 130,
+    directorName: 'Dr. Alejandro Morales Cisneros',
+    directorEmail: 'director@colegio.edu',
+    directorPhone: '+52 (722) 214-0264',
+    directorUsername: 'director@colegio.edu',
+    status: 'active',
+    createdAt: '2026-01-15',
+    subscriptionPlan: 'Enterprise',
+    maxStudents: 1200,
+    enrolledStudentsCount: 420,
+    groupsCount: 4,
+  },
+  {
+    id: 'sch-itv-02',
+    name: 'Instituto Tecnológico del Valle',
+    slug: 'tec-valle',
+    logo: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=150&auto=format&fit=crop&q=80',
+    cct: '15DPR0891X',
+    address: 'Calzada del Valle 450, San Pedro Garza García, Nuevo León',
+    entryTime: '07:30 AM',
+    latitude: 25.6582,
+    longitude: -100.3642,
+    geofenceRadiusMeters: 150,
+    directorName: 'Dra. Gabriela Fuentes Serna',
+    directorEmail: 'gfuentes@tecvalle.edu.mx',
+    directorPhone: '+52 (81) 8320-1190',
+    directorUsername: 'gfuentes@tecvalle.edu.mx',
+    status: 'active',
+    createdAt: '2026-03-01',
+    subscriptionPlan: 'Estándar',
+    maxStudents: 800,
+    enrolledStudentsCount: 310,
+    groupsCount: 3,
+  },
+  {
+    id: 'sch-bach-03',
+    name: 'Bachillerato Miguel Hidalgo',
+    slug: 'bach-hidalgo',
+    logo: 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=150&auto=format&fit=crop&q=80',
+    cct: '14EBH0055Z',
+    address: 'Av. Hidalgo 210, Guadalajara Centro, Jalisco',
+    entryTime: '07:00 AM',
+    latitude: 20.6764,
+    longitude: -103.3470,
+    geofenceRadiusMeters: 100,
+    directorName: 'Mtro. Javier Ortiz Ramos',
+    directorEmail: 'jortiz@bachilleratohidalgo.edu.mx',
+    directorPhone: '+52 (33) 3614-8822',
+    directorUsername: 'jortiz@bachilleratohidalgo.edu.mx',
+    status: 'trial',
+    createdAt: '2026-09-10',
+    subscriptionPlan: 'Piloto',
+    maxStudents: 500,
+    enrolledStudentsCount: 180,
+    groupsCount: 2,
+  },
+];
+
 export const INSTITUTION_INFO = {
-  name: 'Colegio Preparatorio Central',
-  tagline: 'Sistema Institucional de Orientación, Asistencia y Geocerca Escolar',
-  campusName: 'Plantel Oriente · Campus Central',
+  name: 'Escuela Preparatoria Oficial N. 264',
+  acronym: 'E. P. O. 264',
+  tagline: 'Panel Institucional EPO 264 · AulaControl',
+  campusName: 'Plantel EPO 264 · Metepec',
   entryTime: '07:00',
   toleranceMinutes: 10,
 };
@@ -450,6 +521,17 @@ export const INITIAL_STUDENTS: Student[] = [
 ];
 
 export const MOCK_USERS: UserAccount[] = [
+  // 0. Super Administrador (Dueño de la Plataforma AulaControl / SaaS Multi-Plantel)
+  {
+    id: 'usr-superadmin',
+    username: 'sarsjs@gmail.com',
+    password: 'Afore#2025',
+    name: 'Administrador Dueño (sarsjs@gmail.com)',
+    email: 'sarsjs@gmail.com',
+    role: 'superadmin',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    title: 'Dueño de Plataforma · Administrador Global SaaS',
+  },
   // 1. Director General
   {
     id: 'usr-director',

@@ -12,6 +12,7 @@ import {
   AttendanceDispute,
   StudentPresenceStatus,
   ValidationMethod,
+  SchoolInstitution,
 } from './types';
 import {
   MOCK_USERS,
@@ -20,6 +21,7 @@ import {
   INITIAL_GROUPS,
   INITIAL_STUDENTS,
   INITIAL_NOTIFICATIONS,
+  INITIAL_SCHOOLS,
   INSTITUTION_INFO,
 } from './data/mockData';
 import { Navbar } from './components/Navbar';
@@ -28,13 +30,25 @@ import { StudentAppView } from './components/StudentAppView';
 import { TeacherDashboardView } from './components/TeacherDashboardView';
 import { OrientadorDashboardView } from './components/OrientadorDashboardView';
 import { DirectorDashboardView } from './components/DirectorDashboardView';
+import { SuperAdminDashboardView } from './components/SuperAdminDashboardView';
 import { SimulationControls } from './components/SimulationControls';
 import { EtaPromptModal } from './components/EtaPromptModal';
 import { ClassCheckinModal } from './components/ClassCheckinModal';
 import { DisputeModal } from './components/DisputeModal';
 import { NotificationToast } from './components/NotificationToast';
 import { NotificationDrawer } from './components/NotificationDrawer';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Cloud, CloudCheck } from 'lucide-react';
+import {
+  testFirestoreConnection,
+  seedInitialDataIfEmpty,
+  syncStudentToCloud,
+  recordAuditLogToCloud,
+  recordDisputeToCloud,
+  pushNotificationToCloud,
+  subscribeToStudents,
+  syncSchoolToCloud,
+  subscribeToSchools,
+} from './utils/firebaseSync';
 
 const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
   {
@@ -68,10 +82,29 @@ const INITIAL_DISPUTES: AttendanceDispute[] = [
 ];
 
 export default function App() {
-  // Session: starts with Sofía Morales (Alumna)
+  // Schools State (Multi-tenant SaaS)
+  const [schools, setSchools] = useState<SchoolInstitution[]>(() => {
+    const saved = localStorage.getItem('aulacontrol_schools');
+    return saved ? JSON.parse(saved) : INITIAL_SCHOOLS;
+  });
+  const [currentSchool, setCurrentSchool] = useState<SchoolInstitution>(schools[0] || INITIAL_SCHOOLS[0]);
+  const [usersList, setUsersList] = useState<UserAccount[]>(MOCK_USERS);
+
+  // Session: defaults to Super Admin (Dueño de la App) so user can immediately manage schools and directors
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     const saved = localStorage.getItem('aulacontrol_user');
-    return saved ? JSON.parse(saved) : MOCK_USERS[4];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.role === 'superadmin' || parsed.id === 'usr-superadmin') {
+          return MOCK_USERS[0]; // sarsjs@gmail.com
+        }
+        return parsed;
+      } catch {
+        return MOCK_USERS[0];
+      }
+    }
+    return MOCK_USERS[0]; // Start directly as Dueño (sarsjs@gmail.com)
   });
 
   // Master Academic State with Local Storage persistence
@@ -93,6 +126,8 @@ export default function App() {
   const [disputeModalOpen, setDisputeModalOpen] = useState<boolean>(false);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState<boolean>(false);
 
+  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
+
   // Save session state to localStorage
   useEffect(() => {
     if (currentUser) {
@@ -101,6 +136,49 @@ export default function App() {
       localStorage.removeItem('aulacontrol_user');
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    localStorage.setItem('aulacontrol_schools', JSON.stringify(schools));
+  }, [schools]);
+
+  // Firebase Boot & Realtime Sync
+  useEffect(() => {
+    testFirestoreConnection().then((connected) => {
+      setIsCloudConnected(connected);
+      if (connected) {
+        seedInitialDataIfEmpty(INITIAL_STUDENTS, INITIAL_GROUPS);
+      }
+    });
+
+    const unsubscribeStudents = subscribeToStudents((cloudStudents) => {
+      if (cloudStudents && cloudStudents.length > 0) {
+        setStudents((prev) => {
+          const map = new Map(prev.map((s) => [s.id, s]));
+          cloudStudents.forEach((cs) => {
+            map.set(cs.id, { ...map.get(cs.id), ...cs });
+          });
+          return Array.from(map.values());
+        });
+      }
+    });
+
+    const unsubscribeSchools = subscribeToSchools((cloudSchools) => {
+      if (cloudSchools && cloudSchools.length > 0) {
+        setSchools((prev) => {
+          const map = new Map(prev.map((s) => [s.id, s]));
+          cloudSchools.forEach((cs) => {
+            map.set(cs.id, { ...map.get(cs.id), ...cs });
+          });
+          return Array.from(map.values());
+        });
+      }
+    });
+
+    return () => {
+      if (typeof unsubscribeStudents === 'function') unsubscribeStudents();
+      if (typeof unsubscribeSchools === 'function') unsubscribeSchools();
+    };
+  }, []);
 
   // Helper for notification broadcast
   const pushNotification = (
@@ -128,6 +206,7 @@ export default function App() {
       ...details,
     };
     setNotifications((prev) => [newNotif, ...prev]);
+    pushNotificationToCloud(newNotif);
   };
 
   // Primary active student (Sofía Morales)
@@ -141,7 +220,7 @@ export default function App() {
   const studentActiveClass = studentGroup.schedule[0];
 
   // Primary active teacher
-  const currentTeacherUser = currentUser?.role === 'teacher' ? currentUser : MOCK_USERS[3];
+  const currentTeacherUser = currentUser?.role === 'teacher' ? currentUser : MOCK_USERS[4];
   const teacherAssignedGroups = groups.filter((g) =>
     g.schedule.some((s) => s.teacherId === currentTeacherUser.linkedEntityId || s.teacherName.includes('Roberto'))
   );
@@ -149,31 +228,26 @@ export default function App() {
     teacherAssignedGroups[0] || groups[0]
   );
 
-  // Primary active orientador
+  // Primary active orientador (Strict isolation per user)
   const currentOrientadorEntity =
-    orientadores.find(
-      (o) =>
-        o.id === currentUser?.linkedEntityId ||
-        groups.some((g) => g.temporarySubstituteOrientadorId === o.id)
-    ) || orientadores[0];
+    orientadores.find((o) => o.id === currentUser?.linkedEntityId) || orientadores[0];
 
   // 1. Student ETA submission (routes to Orientador + Teacher)
   const handleStudentSubmitEta = (minutes: number, reason: string) => {
+    const updatedStudent: Student = {
+      ...currentStudent,
+      currentStatus: 'en_route_delayed',
+      currentZone: 'En camino hacia el plantel',
+      etaMinutes: minutes,
+      etaReason: reason,
+      etaSentAt: simulatedTime,
+      lastUpdated: simulatedTime,
+    };
+
     setStudents((prev) =>
-      prev.map((s) =>
-        s.id === currentStudent.id
-          ? {
-              ...s,
-              currentStatus: 'en_route_delayed',
-              currentZone: 'En camino hacia el plantel',
-              etaMinutes: minutes,
-              etaReason: reason,
-              etaSentAt: simulatedTime,
-              lastUpdated: simulatedTime,
-            }
-          : s
-      )
+      prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
     );
+    syncStudentToCloud(updatedStudent);
 
     if (studentOrientador) {
       pushNotification(
@@ -208,19 +282,18 @@ export default function App() {
 
   // 2. Student crosses school gate (GPS triggers presence in campus)
   const handleCrossGate = () => {
+    const updatedStudent: Student = {
+      ...currentStudent,
+      currentStatus: 'on_campus_not_in_class',
+      currentZone: 'Plaza Cívica / Patios Centrales',
+      distanceToCampusMeters: 0,
+      lastUpdated: simulatedTime,
+    };
+
     setStudents((prev) =>
-      prev.map((s) =>
-        s.id === currentStudent.id
-          ? {
-              ...s,
-              currentStatus: 'on_campus_not_in_class',
-              currentZone: 'Plaza Cívica / Patios Centrales',
-              distanceToCampusMeters: 0,
-              lastUpdated: simulatedTime,
-            }
-          : s
-      )
+      prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
     );
+    syncStudentToCloud(updatedStudent);
 
     pushNotification(
       'campus_arrival',
@@ -252,39 +325,37 @@ export default function App() {
 
   // 3. Student leaves campus
   const handleLeaveCampus = () => {
+    const updatedStudent: Student = {
+      ...currentStudent,
+      currentStatus: 'outside_school',
+      currentZone: 'Fuera del Plantel (A 1.8 km)',
+      distanceToCampusMeters: 1800,
+      validatedVia: null,
+      validatedAt: undefined,
+      lastUpdated: simulatedTime,
+    };
+
     setStudents((prev) =>
-      prev.map((s) =>
-        s.id === currentStudent.id
-          ? {
-              ...s,
-              currentStatus: 'outside_school',
-              currentZone: 'Fuera del Plantel (A 1.8 km)',
-              distanceToCampusMeters: 1800,
-              validatedVia: null,
-              validatedAt: undefined,
-              lastUpdated: simulatedTime,
-            }
-          : s
-      )
+      prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
     );
+    syncStudentToCloud(updatedStudent);
   };
 
   // 4. Confirm classroom attendance via BLE, PIN, or QR
   const handleConfirmAttendance = (method: ValidationMethod, validatedCode?: string) => {
+    const updatedStudent: Student = {
+      ...currentStudent,
+      currentStatus: 'in_class',
+      currentZone: `${studentActiveClass?.classroom} (${studentActiveClass?.subjectName.split(' ')[0]})`,
+      validatedVia: method,
+      validatedAt: simulatedTime,
+      lastUpdated: simulatedTime,
+    };
+
     setStudents((prev) =>
-      prev.map((s) =>
-        s.id === currentStudent.id
-          ? {
-              ...s,
-              currentStatus: 'in_class',
-              currentZone: `${studentActiveClass?.classroom} (${studentActiveClass?.subjectName.split(' ')[0]})`,
-              validatedVia: method,
-              validatedAt: simulatedTime,
-              lastUpdated: simulatedTime,
-            }
-          : s
-      )
+      prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
     );
+    syncStudentToCloud(updatedStudent);
 
     pushNotification(
       'class_validated',
@@ -306,20 +377,18 @@ export default function App() {
     if (!targetStudent) return;
 
     const previousStatus = targetStudent.currentStatus;
+    const updatedStudent: Student = {
+      ...targetStudent,
+      currentStatus: newStatus,
+      validatedVia: 'director_correction',
+      validatedAt: simulatedTime,
+      lastUpdated: simulatedTime,
+    };
 
     setStudents((prev) =>
-      prev.map((s) =>
-        s.id === studentId
-          ? {
-              ...s,
-              currentStatus: newStatus,
-              validatedVia: 'director_correction',
-              validatedAt: simulatedTime,
-              lastUpdated: simulatedTime,
-            }
-          : s
-      )
+      prev.map((s) => (s.id === studentId ? updatedStudent : s))
     );
+    syncStudentToCloud(updatedStudent);
 
     // Create immutable audit log entry
     const newAuditLog: AuditLogEntry = {
@@ -338,6 +407,7 @@ export default function App() {
     };
 
     setAuditLogs((prev) => [newAuditLog, ...prev]);
+    recordAuditLogToCloud(newAuditLog);
 
     pushNotification(
       'attendance_corrected',
@@ -363,6 +433,7 @@ export default function App() {
     };
 
     setDisputes((prev) => [newDispute, ...prev]);
+    recordDisputeToCloud(newDispute);
 
     pushNotification(
       'dispute_requested',
@@ -381,19 +452,18 @@ export default function App() {
     const dispute = disputes.find((d) => d.id === disputeId);
     if (!dispute) return;
 
+    const updatedDispute: AttendanceDispute = {
+      ...dispute,
+      status: approved ? 'approved' : 'rejected',
+      resolvedBy: currentUser?.name,
+      resolvedAt: simulatedTime,
+      resolutionNotes: notes,
+    };
+
     setDisputes((prev) =>
-      prev.map((d) =>
-        d.id === disputeId
-          ? {
-              ...d,
-              status: approved ? 'approved' : 'rejected',
-              resolvedBy: currentUser?.name,
-              resolvedAt: simulatedTime,
-              resolutionNotes: notes,
-            }
-          : d
-      )
+      prev.map((d) => (d.id === disputeId ? updatedDispute : d))
     );
+    recordDisputeToCloud(updatedDispute);
 
     if (approved) {
       handleDirectorCorrectAttendance(
@@ -644,8 +714,57 @@ export default function App() {
     setDisputeModalOpen(false);
   };
 
+  // 17. SaaS Multi-School Handlers (Dueño de la App)
+  const handleAddSchool = (newSchool: SchoolInstitution, directorUser: UserAccount) => {
+    setSchools((prev) => [newSchool, ...prev]);
+    setUsersList((prev) => [directorUser, ...prev]);
+    syncSchoolToCloud(newSchool);
+    pushNotification(
+      'info',
+      'Nuevo Plantel Escolar Afiliado',
+      `Se registró la escuela ${newSchool.name} (CCT: ${newSchool.cct}) y se generó el Director ${directorUser.name}.`,
+      'superadmin'
+    );
+  };
+
+  const handleUpdateSchool = (updatedSchool: SchoolInstitution) => {
+    setSchools((prev) => prev.map((s) => (s.id === updatedSchool.id ? updatedSchool : s)));
+    if (currentSchool.id === updatedSchool.id) {
+      setCurrentSchool(updatedSchool);
+    }
+    syncSchoolToCloud(updatedSchool);
+    pushNotification(
+      'info',
+      'Parámetros Escolares Actualizados',
+      `Se actualizaron los parámetros técnicos y geocerca de ${updatedSchool.name}.`,
+      'superadmin'
+    );
+  };
+
+  const handleSwitchToSchoolDirector = (school: SchoolInstitution) => {
+    setCurrentSchool(school);
+    const dir = usersList.find((u) => u.schoolId === school.id || u.email === school.directorEmail) || {
+      id: `usr-dir-${school.id}`,
+      username: school.directorEmail,
+      password: 'director123',
+      name: school.directorName,
+      email: school.directorEmail,
+      role: 'director' as const,
+      avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
+      title: `Director General · ${school.name}`,
+      schoolId: school.id,
+    };
+    setCurrentUser(dir);
+    pushNotification(
+      'info',
+      `Modo Director Activo`,
+      `Has ingresado al panel de dirección de ${school.name}. Aquí puedes estructurar grupos, orientadores y materias.`,
+      'director'
+    );
+  };
+
   const handleSwitchUserRole = (role: UserRole) => {
-    const user = MOCK_USERS.find((u) => u.role === role);
+    const user = usersList.find((u) => u.role === role) || MOCK_USERS.find((u) => u.role === role);
     if (user) {
       setCurrentUser(user);
     }
@@ -657,7 +776,7 @@ export default function App() {
 
   // Filter notifications for current user's role and scoping
   const userNotifications = notifications.filter((n) => {
-    if (currentUser.role === 'director') return true;
+    if (currentUser.role === 'superadmin' || currentUser.role === 'director') return true;
     if (n.targetRole === 'all') return true;
     if (currentUser.role === 'orientador') {
       return (
@@ -767,7 +886,25 @@ export default function App() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {isCloudConnected ? (
+              <span
+                title="Sincronizado en tiempo real con Firebase Firestore"
+                className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-lg border border-emerald-500/30 shadow-2xs"
+              >
+                <CloudCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Nube: Firestore Activo</span>
+              </span>
+            ) : (
+              <span
+                title="Modo local con sincronización diferida"
+                className="inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-400 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700"
+              >
+                <Cloud className="w-3.5 h-3.5 text-slate-400" />
+                <span>Nube: Conectando...</span>
+              </span>
+            )}
+
             <button
               type="button"
               onClick={() => handleRunScenarioStep(simulationStep < 5 ? simulationStep + 1 : 1)}
@@ -789,6 +926,17 @@ export default function App() {
 
       {/* Main Role-Specific View */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* ROLE 0: SUPERADMIN (DUEÑO DE LA APP / SAAS MULTI-ESCUELA) */}
+        {currentUser.role === 'superadmin' && (
+          <SuperAdminDashboardView
+            currentUser={currentUser}
+            schools={schools}
+            onAddSchool={handleAddSchool}
+            onUpdateSchool={handleUpdateSchool}
+            onSwitchToSchoolDirector={handleSwitchToSchoolDirector}
+          />
+        )}
+
         {/* ROLE 1: DIRECTOR */}
         {currentUser.role === 'director' && (
           <DirectorDashboardView

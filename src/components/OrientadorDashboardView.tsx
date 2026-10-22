@@ -83,7 +83,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   );
   const [csvSuccessMessage, setCsvSuccessMessage] = useState<string>('');
 
-  const currentGroup = allGroups.find((g) => g.id === selectedGroupId) || myGroups[0];
+  const currentGroup = myGroups.find((g) => g.id === selectedGroupId) || myGroups[0];
   const groupStudents = allStudents.filter((s) => s.groupId === currentGroup?.id);
 
   const myStudents = allStudents.filter((s) =>

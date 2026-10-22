@@ -1,0 +1,157 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Alumno inscrito con estado de presencia escolar, geocerca y validación de aula.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "matricula": { "type": "string", "maxLength": 64 },
+        "groupId": { "type": "string", "maxLength": 64 },
+        "currentStatus": { "type": "string", "enum": ["outside_school", "en_route_delayed", "on_campus_not_in_class", "in_class", "absent"] },
+        "currentZone": { "type": "string", "maxLength": 128 },
+        "distanceToCampusMeters": { "type": "number" },
+        "lastUpdated": { "type": "string", "maxLength": 32 },
+        "etaMinutes": { "type": "number" },
+        "etaReason": { "type": "string", "maxLength": 256 },
+        "etaSentAt": { "type": "string", "maxLength": 32 },
+        "validatedVia": { "type": "string", "enum": ["ble_auto", "ble_manual", "pin_backup", "qr_backup", "teacher_manual", "director_correction"] },
+        "validatedAt": { "type": "string", "maxLength": 32 },
+        "avatar": { "type": "string", "maxLength": 512 }
+      },
+      "required": ["id", "name", "matricula", "groupId", "currentStatus", "currentZone"]
+    },
+    "SchoolGroup": {
+      "title": "SchoolGroup",
+      "description": "Grupo académico escolar a cargo de un orientador.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 64 },
+        "semester": { "type": "number" },
+        "shift": { "type": "string", "enum": ["matutino", "vespertino"] },
+        "orientadorId": { "type": "string", "maxLength": 64 },
+        "temporarySubstituteOrientadorId": { "type": "string", "maxLength": 64 },
+        "studentsCount": { "type": "number" },
+        "classroomDefault": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "semester", "shift", "orientadorId"]
+    },
+    "AttendanceDispute": {
+      "title": "AttendanceDispute",
+      "description": "Solicitud de revisión o justificación de asistencia levantada por un alumno.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "attendanceId": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 128 },
+        "groupId": { "type": "string", "maxLength": 64 },
+        "subjectName": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 32 },
+        "studentReason": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "resolutionNotes": { "type": "string", "maxLength": 500 },
+        "resolvedBy": { "type": "string", "maxLength": 128 },
+        "resolvedAt": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["id", "studentId", "studentName", "groupId", "studentReason", "status"]
+    },
+    "AuditLogEntry": {
+      "title": "AuditLogEntry",
+      "description": "Registro inmutable de auditoría para correcciones de asistencia por director o docente.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "attendanceId": { "type": "string", "maxLength": 128 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "studentName": { "type": "string", "maxLength": 128 },
+        "groupId": { "type": "string", "maxLength": 64 },
+        "subjectName": { "type": "string", "maxLength": 128 },
+        "previousStatus": { "type": "string", "maxLength": 64 },
+        "newStatus": { "type": "string", "maxLength": 64 },
+        "modifiedBy": { "type": "string", "maxLength": 128 },
+        "modifiedByRole": { "type": "string", "enum": ["director", "orientador", "teacher"] },
+        "reason": { "type": "string", "maxLength": 500 },
+        "timestamp": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["id", "studentId", "studentName", "previousStatus", "newStatus", "modifiedBy", "modifiedByRole", "reason", "timestamp"]
+    },
+    "SystemNotification": {
+      "title": "SystemNotification",
+      "description": "Notificación escolar enviada a roles específicos (ETA, faltas, avisos).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["eta_delay_report", "campus_entry", "class_checkin", "class_unattended", "schedule_alert", "attendance_dispute"] },
+        "title": { "type": "string", "maxLength": 128 },
+        "message": { "type": "string", "maxLength": 500 },
+        "timestamp": { "type": "string", "maxLength": 32 },
+        "targetRole": { "type": "string", "enum": ["all", "director", "orientador", "teacher", "student"] },
+        "read": { "type": "boolean" },
+        "targetUserId": { "type": "string", "maxLength": 128 },
+        "groupId": { "type": "string", "maxLength": 64 },
+        "orientadorId": { "type": "string", "maxLength": 64 },
+        "teacherId": { "type": "string", "maxLength": 64 },
+        "studentId": { "type": "string", "maxLength": 128 },
+        "actionRequired": { "type": "boolean" }
+      },
+      "required": ["id", "type", "title", "message", "timestamp", "targetRole", "read"]
+    },
+    "SchoolInstitution": {
+      "title": "SchoolInstitution",
+      "description": "Institución escolar registrada por el dueño de la app (SaaS multi-plantel) con coordenadas y director asignado.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "slug": { "type": "string", "maxLength": 64 },
+        "logo": { "type": "string", "maxLength": 512 },
+        "cct": { "type": "string", "maxLength": 64 },
+        "address": { "type": "string", "maxLength": 256 },
+        "entryTime": { "type": "string", "maxLength": 32 },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "geofenceRadiusMeters": { "type": "number" },
+        "directorName": { "type": "string", "maxLength": 128 },
+        "directorEmail": { "type": "string", "maxLength": 128 },
+        "directorPhone": { "type": "string", "maxLength": 64 },
+        "directorUsername": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["active", "suspended", "trial"] },
+        "createdAt": { "type": "string", "maxLength": 32 },
+        "subscriptionPlan": { "type": "string", "enum": ["Piloto", "Estándar", "Enterprise"] },
+        "maxStudents": { "type": "number" },
+        "enrolledStudentsCount": { "type": "number" },
+        "groupsCount": { "type": "number" }
+      },
+      "required": ["id", "name", "cct", "latitude", "longitude", "geofenceRadiusMeters", "directorName", "directorEmail", "status"]
+    }
+  },
+  "firestore": {
+    "/schools/{schoolId}": {
+      "schema": "SchoolInstitution",
+      "description": "Colección de colegios y planteles registrados por el dueño de la plataforma."
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Colección de alumnos del plantel."
+    },
+    "/groups/{groupId}": {
+      "schema": "SchoolGroup",
+      "description": "Colección de grupos académicos y asignación de orientador."
+    },
+    "/disputes/{disputeId}": {
+      "schema": "AttendanceDispute",
+      "description": "Solicitudes de revisión de asistencia emitidas por alumnos."
+    },
+    "/audit_logs/{auditId}": {
+      "schema": "AuditLogEntry",
+      "description": "Historial inmutable de auditoría escolar."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "SystemNotification",
+      "description": "Notificaciones en tiempo real para la comunidad escolar."
+    }
+  }
+}

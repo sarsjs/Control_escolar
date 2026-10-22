@@ -251,8 +251,8 @@ export const ClassCheckinModal: React.FC<ClassCheckinModalProps> = ({
 
                   {isScanningBle && (
                     <div className="mt-3">
-                      <p className="text-xs font-semibold text-slate-700">Detectando baliza o profesor BLE...</p>
-                      <p className="text-[11px] text-slate-400">Verificando cercanía física en {activeClass.classroom}</p>
+                      <p className="text-xs font-semibold text-slate-700">Detectando teléfono del docente {activeClass.teacherName}...</p>
+                      <p className="text-[11px] text-slate-400">Verificando señal Bluetooth de proximidad en {activeClass.classroom}</p>
                     </div>
                   )}
 
@@ -260,13 +260,13 @@ export const ClassCheckinModal: React.FC<ClassCheckinModalProps> = ({
                     <div className="mt-3 space-y-3">
                       <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-left text-xs">
                         <div className="flex items-center justify-between font-semibold text-emerald-950">
-                          <span>Baliza Vinculada: {bleResult.name}</span>
+                          <span>Docente Vinculado: {activeClass.teacherName}</span>
                           <span className="font-mono text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                            -54 dBm (Proximidad directa)
+                            -54 dBm (A ~1.5 metros)
                           </span>
                         </div>
                         <p className="text-[11px] text-emerald-800 mt-1 leading-relaxed">
-                          {bleResult.diagnostic}
+                          El teléfono del docente captó la presencia de tu dispositivo en el aula {activeClass.classroom}.
                         </p>
                       </div>
 

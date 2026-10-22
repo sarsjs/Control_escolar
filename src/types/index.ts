@@ -1,4 +1,27 @@
-export type UserRole = 'student' | 'teacher' | 'orientador' | 'director';
+export type UserRole = 'superadmin' | 'director' | 'orientador' | 'teacher' | 'student';
+
+export interface SchoolInstitution {
+  id: string;
+  name: string;
+  slug: string;
+  logo: string;
+  cct: string; // Clave de Centro de Trabajo / Registro oficial
+  address: string;
+  entryTime: string; // e.g. "07:00 AM"
+  latitude: number;
+  longitude: number;
+  geofenceRadiusMeters: number; // e.g. 100 metros
+  directorName: string;
+  directorEmail: string;
+  directorPhone?: string;
+  directorUsername: string;
+  status: 'active' | 'suspended' | 'trial';
+  createdAt: string;
+  subscriptionPlan: 'Piloto' | 'Estándar' | 'Enterprise';
+  maxStudents: number;
+  enrolledStudentsCount: number;
+  groupsCount: number;
+}
 
 export interface UserAccount {
   id: string;
@@ -9,6 +32,7 @@ export interface UserAccount {
   role: UserRole;
   avatar: string;
   title: string;
+  schoolId?: string;
   linkedEntityId?: string; // studentId, teacherId, orientadorId
 }
 
@@ -149,7 +173,7 @@ export interface SystemNotification {
   title: string;
   message: string;
   timestamp: string;
-  targetRole: 'student' | 'teacher' | 'orientador' | 'director' | 'all';
+  targetRole: 'superadmin' | 'student' | 'teacher' | 'orientador' | 'director' | 'all';
   targetUserId?: string;
   groupId?: string;
   orientadorId?: string;

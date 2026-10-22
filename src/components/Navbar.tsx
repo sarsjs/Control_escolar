@@ -35,6 +35,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
+      case 'superadmin':
+        return { label: 'Dueño de la App', bg: 'bg-slate-900 text-white border border-indigo-400/40' };
       case 'director':
         return { label: 'Director', bg: 'bg-indigo-600 text-white' };
       case 'orientador':
@@ -71,6 +73,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider px-2">
             Probar Rol:
           </span>
+          <button
+            type="button"
+            onClick={() => onSwitchUser('superadmin')}
+            className={`px-3 py-1.5 rounded-lg transition-all ${
+              currentUser.role === 'superadmin'
+                ? 'bg-slate-900 text-white shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Dueño (SaaS)
+          </button>
           <button
             type="button"
             onClick={() => onSwitchUser('director')}
