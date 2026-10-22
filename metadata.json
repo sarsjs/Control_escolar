@@ -1,0 +1,6 @@
+{
+  "name": "AulaControl - Asistencia Escolar y Monitoreo Georreferenciado",
+  "description": "Plataforma escolar inteligente para avisos de entrada, reporte de retrasos (ETA) a docentes, detección de presencia en campus escolar por geocerca y validación de asistencia en salón por código y Bluetooth.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
