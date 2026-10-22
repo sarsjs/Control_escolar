@@ -771,28 +771,6 @@ export default function App() {
     );
   };
 
-  const handleSwitchToSchoolDirector = (school: SchoolInstitution) => {
-    setCurrentSchool(school);
-    const dir = usersList.find((u) => u.schoolId === school.id || u.email === school.directorEmail) || {
-      id: `usr-dir-${school.id}`,
-      username: school.directorEmail,
-      password: 'director123',
-      name: school.directorName,
-      email: school.directorEmail,
-      role: 'director' as const,
-      avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
-      title: `Director General · ${school.name}`,
-      schoolId: school.id,
-    };
-    setCurrentUser(dir);
-    pushNotification(
-      'info',
-      `Modo Director Activo`,
-      `Has ingresado al panel de dirección de ${school.name}. Aquí puedes estructurar grupos, orientadores y materias.`,
-      'director'
-    );
-  };
-
   if (!currentUser) {
     return <LoginView onLoginSuccess={(u) => setCurrentUser(u)} />;
   }
@@ -955,7 +933,6 @@ export default function App() {
             schools={schools}
             onAddSchool={handleAddSchool}
             onUpdateSchool={handleUpdateSchool}
-            onSwitchToSchoolDirector={handleSwitchToSchoolDirector}
           />
         )}
 
