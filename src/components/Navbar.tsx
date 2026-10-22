@@ -12,7 +12,7 @@ import {
   GraduationCap,
   ChevronDown,
 } from 'lucide-react';
-import { UserAccount } from '../types';
+import { UserAccount, UserRole } from '../types';
 
 export type ActiveNavTab = 'dashboard' | 'groups' | 'schedule' | 'map' | 'simulator';
 
@@ -31,7 +31,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNotifications,
   onLogout,
 }) => {
-  const getRoleBadge = (role: UserRole) => {
+  const getRoleBadge = (role: UserRole): { label: string; bg: string } => {
     switch (role) {
       case 'superadmin':
         return { label: 'Dueño de la App', bg: 'bg-slate-900 text-white border border-indigo-400/40' };
@@ -43,6 +43,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         return { label: 'Docente', bg: 'bg-blue-600 text-white' };
       case 'student':
         return { label: 'Alumno', bg: 'bg-emerald-600 text-white' };
+      default:
+        return { label: 'Usuario', bg: 'bg-slate-600 text-white' };
     }
   };
 
