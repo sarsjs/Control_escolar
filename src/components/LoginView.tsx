@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
+import { sendPasswordResetEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { UserAccount, SchoolInstitution, UserRole } from '../types';
 import { INSTITUTION_INFO } from '../data/mockData';
@@ -64,7 +64,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, currentSch
       const credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
       const profileSnapshot = await getDoc(doc(db, 'users', credential.user.uid));
       if (!profileSnapshot.exists()) {
-        await auth.signOut();
+        await signOut(auth);
         setError('Tu cuenta inició sesión, pero no tiene un perfil escolar autorizado. Solicita al administrador que registre tu perfil.');
         return;
       }
