@@ -43,7 +43,6 @@ import { NotificationDrawer } from './components/NotificationDrawer';
 import { Sparkles, Cloud, CloudCheck } from 'lucide-react';
 import {
   testFirestoreConnection,
-  seedInitialDataIfEmpty,
   syncStudentToCloud,
   recordAuditLogToCloud,
   recordDisputeToCloud,
