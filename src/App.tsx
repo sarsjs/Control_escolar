@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
 import {
   UserAccount,
   UserRole,
@@ -115,8 +118,47 @@ export default function App() {
 
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
 
-  // Save session state to localStorage
+  // Restore the authenticated Firebase session and verify its school profile on every load.
   useEffect(() => {
+    let active = true;
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        if (active) setCurrentUser(null);
+        return;
+      }
+
+      try {
+        const profileSnapshot = await getDoc(doc(db, 'users', firebaseUser.uid));
+        const profile = profileSnapshot.data();
+        const validRoles: UserRole[] = ['superadmin', 'director', 'orientador', 'teacher', 'student'];
+        if (!profileSnapshot.exists() || typeof profile?.role !== 'string' || !validRoles.includes(profile.role as UserRole)) {
+          await signOut(auth);
+          if (active) setCurrentUser(null);
+          return;
+        }
+
+        const role = profile.role as UserRole;
+        if (active) setCurrentUser({
+          id: firebaseUser.uid,
+          username: typeof profile.username === 'string' ? profile.username : (firebaseUser.email || ''),
+          name: typeof profile.name === 'string' ? profile.name : (firebaseUser.displayName || firebaseUser.email || 'Usuario'),
+          email: firebaseUser.email || '',
+          role,
+          avatar: typeof profile.avatar === 'string' ? profile.avatar : '',
+          title: typeof profile.title === 'string' ? profile.title : role,
+          ...(typeof profile.schoolId === 'string' ? { schoolId: profile.schoolId } : {}),
+          ...(typeof profile.linkedEntityId === 'string' ? { linkedEntityId: profile.linkedEntityId } : {}),
+        });
+      } catch (error) {
+        console.error('No se pudo restaurar el perfil escolar:', error);
+        await signOut(auth).catch(() => undefined);
+        if (active) setCurrentUser(null);
+      }
+    });
+    return () => { active = false; unsubscribe(); };
+  }, []);
+
+  // Save session state to localStorage
     if (currentUser) {
       localStorage.setItem('aulacontrol_user', JSON.stringify(currentUser));
     } else {
@@ -128,14 +170,15 @@ export default function App() {
     localStorage.setItem('aulacontrol_schools', JSON.stringify(schools));
   }, [schools]);
 
-  // Firebase Boot & Realtime Sync
+  // Firebase data access starts only after Firebase Authentication confirms a profile.
+  // Never seed demo students into a real school database automatically.
   useEffect(() => {
-    testFirestoreConnection().then((connected) => {
-      setIsCloudConnected(connected);
-      if (connected) {
-        seedInitialDataIfEmpty(INITIAL_STUDENTS, INITIAL_GROUPS);
-      }
-    });
+    if (!currentUser) {
+      setIsCloudConnected(false);
+      return;
+    }
+
+    testFirestoreConnection().then(setIsCloudConnected);
 
     const unsubscribeStudents = subscribeToStudents((cloudStudents) => {
       if (cloudStudents && cloudStudents.length > 0) {
@@ -165,7 +208,7 @@ export default function App() {
       if (typeof unsubscribeStudents === 'function') unsubscribeStudents();
       if (typeof unsubscribeSchools === 'function') unsubscribeSchools();
     };
-  }, []);
+  }, [currentUser?.id]);
 
   // Helper for notification broadcast
   const pushNotification = (
