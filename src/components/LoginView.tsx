@@ -71,7 +71,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, currentSch
 
       const profile = profileSnapshot.data();
       if (typeof profile.role !== 'string' || !validRoles.includes(profile.role as UserRole)) {
-        await auth.signOut();
+        await signOut(auth);
         setError('El perfil no tiene un rol válido. Contacta al administrador escolar.');
         return;
       }
