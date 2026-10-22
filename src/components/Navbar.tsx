@@ -12,7 +12,7 @@ import {
   GraduationCap,
   ChevronDown,
 } from 'lucide-react';
-import { UserAccount, UserRole } from '../types';
+import { UserAccount } from '../types';
 
 export type ActiveNavTab = 'dashboard' | 'groups' | 'schedule' | 'map' | 'simulator';
 
