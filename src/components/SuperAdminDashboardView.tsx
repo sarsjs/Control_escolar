@@ -9,7 +9,6 @@ import {
   UserCheck,
   ShieldCheck,
   Search,
-  ExternalLink,
   Edit3,
   Sliders,
   CheckCircle2,
