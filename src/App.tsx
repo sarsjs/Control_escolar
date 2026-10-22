@@ -158,6 +158,7 @@ export default function App() {
   }, []);
 
   // Save session state to localStorage
+  useEffect(() => {
     if (currentUser) {
       localStorage.setItem('aulacontrol_user', JSON.stringify(currentUser));
     } else {
