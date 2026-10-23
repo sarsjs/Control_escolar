@@ -48,7 +48,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, currentSch
 
       const profile = profileSnapshot.data();
       if (typeof profile.role !== 'string' || !allowedRoles.includes(profile.role as UserRole)) {
-        await auth.signOut();
+        await signOut(auth);
         throw new Error('El perfil no tiene un rol válido. Contacta al administrador.');
       }
 
