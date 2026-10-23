@@ -56,12 +56,15 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 export async function testFirestoreConnection() {
+  const currentUser = auth.currentUser;
+  if (!currentUser) return false;
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log('Firebase Firestore connected successfully to:', firebaseConfig.projectId);
+    const profile = await getDocFromServer(doc(db, 'users', currentUser.uid));
+    if (!profile.exists()) return false;
+    console.log('Firebase Firestore authenticated profile check succeeded for:', firebaseConfig.projectId);
     return true;
   } catch (error) {
-    console.warn('Firebase test connection status:', error);
+    console.warn('Firebase authenticated profile check failed:', error);
     return false;
   }
 }
