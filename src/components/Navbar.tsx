@@ -1,16 +1,9 @@
 import React from 'react';
 import {
   School,
-  Smartphone,
-  Users,
-  Compass,
   Clock,
   Bell,
-  Sparkles,
   LogOut,
-  Building2,
-  GraduationCap,
-  ChevronDown,
 } from 'lucide-react';
 import { UserAccount, UserRole } from '../types';
 
@@ -31,7 +24,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   unreadCount,
   onOpenNotifications,
   onLogout,
-  onSwitchUser,
 }) => {
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
@@ -68,7 +60,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Role switching removed: role is assigned by the authenticated Firestore profile. */}\n\n        {/* Zone 3: Clock, User Avatar & Logout */}
+        {/* Role switching removed: role is assigned by the authenticated Firestore profile. */}
+
+        {/* Zone 3: Clock, User Avatar & Logout */}
         <div className="flex items-center gap-3 shrink-0">
           {/* Simulated clock */}
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl font-mono text-xs text-slate-700 tabular-nums">
