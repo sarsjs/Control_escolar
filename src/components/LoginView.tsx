@@ -60,8 +60,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, currentSch
     }
 
     setIsLoading(true);
+    let loginStage = 'Firebase Authentication';
     try {
       const credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+      loginStage = 'lectura del perfil en Firestore';
       const profileSnapshot = await getDoc(doc(db, 'users', credential.user.uid));
       if (!profileSnapshot.exists()) {
         await signOut(auth);
@@ -90,7 +92,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, currentSch
       };
       onLoginSuccess(user);
     } catch (loginError) {
-      setError(authErrorMessage(loginError));
+      const code = typeof loginError === 'object' && loginError !== null && 'code' in loginError
+        ? String((loginError as { code?: unknown }).code)
+        : 'sin-codigo';
+      const message = loginError instanceof Error ? loginError.message : String(loginError);
+      console.error(`AulaControl login failed during ${loginStage}:`, { code, message });
+      setError(`${authErrorMessage(loginError)} (Etapa: ${loginStage}; código: ${code})`);
     } finally {
       setIsLoading(false);
     }
