@@ -19,44 +19,44 @@ service cloud.firestore {
 
     // Schools collection (multi-tenant management)
     match /schools/{schoolId} {
-      allow read: if isValidId(schoolId);
-      allow create, update: if isValidId(schoolId);
-      allow delete: if isValidId(schoolId);
+      allow read: if isSignedIn() && isValidId(schoolId);
+      allow create, update: if isSignedIn() && isValidId(schoolId);
+      allow delete: if isSignedIn() && isValidId(schoolId);
     }
 
     // Students collection
     match /students/{studentId} {
-      allow read: if isValidId(studentId);
-      allow create, update: if isValidId(studentId);
-      allow delete: if isValidId(studentId);
+      allow read: if isSignedIn() && isValidId(studentId);
+      allow create, update: if isSignedIn() && isValidId(studentId);
+      allow delete: if isSignedIn() && isValidId(studentId);
     }
 
     // Groups collection
     match /groups/{groupId} {
-      allow read: if isValidId(groupId);
-      allow create, update: if isValidId(groupId);
-      allow delete: if isValidId(groupId);
+      allow read: if isSignedIn() && isValidId(groupId);
+      allow create, update: if isSignedIn() && isValidId(groupId);
+      allow delete: if isSignedIn() && isValidId(groupId);
     }
 
     // Disputes collection
     match /disputes/{disputeId} {
-      allow read: if isValidId(disputeId);
-      allow create, update: if isValidId(disputeId);
-      allow delete: if isValidId(disputeId);
+      allow read: if isSignedIn() && isValidId(disputeId);
+      allow create, update: if isSignedIn() && isValidId(disputeId);
+      allow delete: if isSignedIn() && isValidId(disputeId);
     }
 
     // Audit logs collection (immutable records)
     match /audit_logs/{auditId} {
-      allow read: if isValidId(auditId);
-      allow create: if isValidId(auditId);
+      allow read: if isSignedIn() && isValidId(auditId);
+      allow create: if isSignedIn() && isValidId(auditId);
       allow update, delete: if false; // Immutable audit trail
     }
 
     // Notifications collection
     match /notifications/{notificationId} {
-      allow read: if isValidId(notificationId);
-      allow create, update: if isValidId(notificationId);
-      allow delete: if isValidId(notificationId);
+      allow read: if isSignedIn() && isValidId(notificationId);
+      allow create, update: if isSignedIn() && isValidId(notificationId);
+      allow delete: if isSignedIn() && isValidId(notificationId);
     }
 
   }
