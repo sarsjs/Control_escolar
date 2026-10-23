@@ -22,7 +22,7 @@ interface NavbarProps {
   unreadCount: number;
   onOpenNotifications: () => void;
   onLogout: () => void;
-  onSwitchUser: (userRole: UserRole) => void;
+  onSwitchUser?: (userRole: UserRole) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -68,69 +68,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Zone 2: Fast Role Switcher for Testing (CRITICAL FOR USER CONVENIENCE) */}
-        <div className="hidden lg:flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
-          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider px-2">
-            Probar Rol:
-          </span>
-          <button
-            type="button"
-            onClick={() => onSwitchUser('superadmin')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
-              currentUser.role === 'superadmin'
-                ? 'bg-slate-900 text-white shadow-xs font-bold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Dueño (SaaS)
-          </button>
-          <button
-            type="button"
-            onClick={() => onSwitchUser('director')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
-              currentUser.role === 'director'
-                ? 'bg-white text-indigo-700 shadow-xs font-bold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Director
-          </button>
-          <button
-            type="button"
-            onClick={() => onSwitchUser('orientador')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
-              currentUser.role === 'orientador'
-                ? 'bg-white text-amber-800 shadow-xs font-bold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Orientador
-          </button>
-          <button
-            type="button"
-            onClick={() => onSwitchUser('teacher')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
-              currentUser.role === 'teacher'
-                ? 'bg-white text-blue-700 shadow-xs font-bold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Docente
-          </button>
-          <button
-            type="button"
-            onClick={() => onSwitchUser('student')}
-            className={`px-3 py-1.5 rounded-lg transition-all ${
-              currentUser.role === 'student'
-                ? 'bg-white text-emerald-700 shadow-xs font-bold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Alumno
-          </button>
-        </div>
-
-        {/* Zone 3: Clock, User Avatar & Logout */}
+        {/* Role switching removed: role is assigned by the authenticated Firestore profile. */}\n\n        {/* Zone 3: Clock, User Avatar & Logout */}
         <div className="flex items-center gap-3 shrink-0">
           {/* Simulated clock */}
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl font-mono text-xs text-slate-700 tabular-nums">
@@ -179,46 +117,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Mobile Role Switcher Strip */}
-      <div className="lg:hidden border-t border-slate-200 px-4 py-2 flex items-center justify-between gap-1 overflow-x-auto text-xs bg-slate-50">
-        <span className="text-[10px] text-slate-400 font-bold uppercase shrink-0">Rol:</span>
-        <button
-          type="button"
-          onClick={() => onSwitchUser('director')}
-          className={`px-2.5 py-1 rounded-lg whitespace-nowrap text-xs font-semibold ${
-            currentUser.role === 'director' ? 'bg-indigo-600 text-white' : 'text-slate-600'
-          }`}
-        >
-          Director
-        </button>
-        <button
-          type="button"
-          onClick={() => onSwitchUser('orientador')}
-          className={`px-2.5 py-1 rounded-lg whitespace-nowrap text-xs font-semibold ${
-            currentUser.role === 'orientador' ? 'bg-amber-600 text-white' : 'text-slate-600'
-          }`}
-        >
-          Orientador
-        </button>
-        <button
-          type="button"
-          onClick={() => onSwitchUser('teacher')}
-          className={`px-2.5 py-1 rounded-lg whitespace-nowrap text-xs font-semibold ${
-            currentUser.role === 'teacher' ? 'bg-blue-600 text-white' : 'text-slate-600'
-          }`}
-        >
-          Docente
-        </button>
-        <button
-          type="button"
-          onClick={() => onSwitchUser('student')}
-          className={`px-2.5 py-1 rounded-lg whitespace-nowrap text-xs font-semibold ${
-            currentUser.role === 'student' ? 'bg-emerald-600 text-white' : 'text-slate-600'
-          }`}
-        >
-          Alumno
-        </button>
-      </div>
     </header>
   );
 };
