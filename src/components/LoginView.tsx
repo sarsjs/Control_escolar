@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { UserAccount, UserRole, SchoolInstitution } from '../types';
 import { INSTITUTION_INFO } from '../data/mockData';
@@ -42,7 +42,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, currentSch
       const credential = await signInWithEmailAndPassword(auth, cleanEmail, password);
       const profileSnapshot = await getDoc(doc(db, 'users', credential.user.uid));
       if (!profileSnapshot.exists()) {
-        await auth.signOut();
+        await signOut(auth);
         throw new Error('Tu cuenta se autenticó, pero no tiene un perfil autorizado en AulaControl. Contacta al administrador.');
       }
 
