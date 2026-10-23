@@ -162,13 +162,18 @@ export default function App() {
     localStorage.setItem('aulacontrol_schools', JSON.stringify(schools));
   }, [schools]);
 
-  // Firebase Boot & Realtime Sync
+  // Firebase Boot & Realtime Sync: subscribe only after Firebase identity and profile are verified.
   useEffect(() => {
+    if (!authReady || !currentUser) {
+      setIsCloudConnected(false);
+      return;
+    }
+
+    let cancelled = false;
     testFirestoreConnection().then((connected) => {
+      if (cancelled) return;
       setIsCloudConnected(connected);
-      if (connected) {
-        seedInitialDataIfEmpty(INITIAL_STUDENTS, INITIAL_GROUPS);
-      }
+      if (connected) seedInitialDataIfEmpty(INITIAL_STUDENTS, INITIAL_GROUPS);
     });
 
     const unsubscribeStudents = subscribeToStudents((cloudStudents) => {
@@ -197,9 +202,10 @@ export default function App() {
 
     return () => {
       if (typeof unsubscribeStudents === 'function') unsubscribeStudents();
+      cancelled = true;
       if (typeof unsubscribeSchools === 'function') unsubscribeSchools();
     };
-  }, []);
+  }, [authReady, currentUser]);
 
   // Helper for notification broadcast
   const pushNotification = (
