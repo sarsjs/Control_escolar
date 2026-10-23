@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
 import {
   UserAccount,
   UserRole,
@@ -90,22 +93,9 @@ export default function App() {
   const [currentSchool, setCurrentSchool] = useState<SchoolInstitution>(schools[0] || INITIAL_SCHOOLS[0]);
   const [usersList, setUsersList] = useState<UserAccount[]>(MOCK_USERS);
 
-  // Session: defaults to Super Admin (Dueño de la App) so user can immediately manage schools and directors
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    const saved = localStorage.getItem('aulacontrol_user');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.role === 'superadmin' || parsed.id === 'usr-superadmin') {
-          return MOCK_USERS[0]; // sarsjs@gmail.com
-        }
-        return parsed;
-      } catch {
-        return MOCK_USERS[0];
-      }
-    }
-    return MOCK_USERS[0]; // Start directly as Dueño (sarsjs@gmail.com)
-  });
+  // Session comes only from Firebase Authentication; never trust a localStorage role.
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [authReady, setAuthReady] = useState<boolean>(false);
 
   // Master Academic State with Local Storage persistence
   const [orientadores, setOrientadores] = useState<Orientador[]>(MOCK_ORIENTADORES);
@@ -128,14 +118,45 @@ export default function App() {
 
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
 
-  // Save session state to localStorage
+  // Resolve every session against the Firebase UID and its server-side profile.
   useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('aulacontrol_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('aulacontrol_user');
-    }
-  }, [currentUser]);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setCurrentUser(null);
+        setAuthReady(true);
+        return;
+      }
+      try {
+        const profileSnapshot = await getDoc(doc(db, 'users', firebaseUser.uid));
+        const profile = profileSnapshot.exists() ? profileSnapshot.data() : null;
+        const validRoles: UserRole[] = ['superadmin', 'director', 'orientador', 'teacher', 'student'];
+        if (!profile || typeof profile.role !== 'string' || !validRoles.includes(profile.role as UserRole)) {
+          await signOut(auth);
+          setCurrentUser(null);
+          setAuthReady(true);
+          return;
+        }
+        const role = profile.role as UserRole;
+        setCurrentUser({
+          id: firebaseUser.uid,
+          username: typeof profile.username === 'string' ? profile.username : (firebaseUser.email || ''),
+          name: typeof profile.name === 'string' && profile.name.trim() ? profile.name : (firebaseUser.displayName || firebaseUser.email || 'Usuario'),
+          email: firebaseUser.email || '',
+          role,
+          avatar: typeof profile.avatar === 'string' ? profile.avatar : '',
+          title: typeof profile.title === 'string' ? profile.title : role,
+          ...(typeof profile.schoolId === 'string' ? { schoolId: profile.schoolId } : {}),
+          ...(typeof profile.linkedEntityId === 'string' ? { linkedEntityId: profile.linkedEntityId } : {}),
+        });
+      } catch (error) {
+        console.error('No se pudo validar el perfil de AulaControl:', error);
+        setCurrentUser(null);
+      } finally {
+        setAuthReady(true);
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('aulacontrol_schools', JSON.stringify(schools));
@@ -770,8 +791,12 @@ export default function App() {
     }
   };
 
+  if (!authReady) {
+    return <div className="min-h-screen bg-[#070709] text-white flex items-center justify-center text-sm">Verificando sesión segura…</div>;
+  }
+
   if (!currentUser) {
-    return <LoginView onLoginSuccess={(u) => setCurrentUser(u)} />;
+    return <LoginView onLoginSuccess={(u) => setCurrentUser(u)} currentSchool={currentSchool} />;
   }
 
   // Filter notifications for current user's role and scoping
@@ -865,7 +890,7 @@ export default function App() {
         simulatedTime={simulatedTime}
         unreadCount={unreadCount}
         onOpenNotifications={() => setNotificationDrawerOpen(true)}
-        onLogout={() => setCurrentUser(null)}
+        onLogout={() => { void signOut(auth); setCurrentUser(null); }}
         onSwitchUser={handleSwitchUserRole}
       />
 
