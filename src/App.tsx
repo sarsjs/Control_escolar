@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
 import {
   UserAccount,
   UserRole,
@@ -40,7 +43,6 @@ import { NotificationDrawer } from './components/NotificationDrawer';
 import { Sparkles, Cloud, CloudCheck } from 'lucide-react';
 import {
   testFirestoreConnection,
-  seedInitialDataIfEmpty,
   syncStudentToCloud,
   recordAuditLogToCloud,
   recordDisputeToCloud,
@@ -90,22 +92,9 @@ export default function App() {
   const [currentSchool, setCurrentSchool] = useState<SchoolInstitution>(schools[0] || INITIAL_SCHOOLS[0]);
   const [usersList, setUsersList] = useState<UserAccount[]>(MOCK_USERS);
 
-  // Session: defaults to Super Admin (Dueño de la App) so user can immediately manage schools and directors
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    const saved = localStorage.getItem('aulacontrol_user');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.role === 'superadmin' || parsed.id === 'usr-superadmin') {
-          return MOCK_USERS[0]; // sarsjs@gmail.com
-        }
-        return parsed;
-      } catch {
-        return MOCK_USERS[0];
-      }
-    }
-    return MOCK_USERS[0]; // Start directly as Dueño (sarsjs@gmail.com)
-  });
+  // Never grant a role from localStorage alone. A session must start at the login screen.
+  // The cached profile is not an authentication credential and can be edited by the browser user.
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
 
   // Master Academic State with Local Storage persistence
   const [orientadores, setOrientadores] = useState<Orientador[]>(MOCK_ORIENTADORES);
@@ -128,6 +117,46 @@ export default function App() {
 
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
 
+  // Restore the authenticated Firebase session and verify its school profile on every load.
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        if (active) setCurrentUser(null);
+        return;
+      }
+
+      try {
+        const profileSnapshot = await getDoc(doc(db, 'users', firebaseUser.uid));
+        const profile = profileSnapshot.data();
+        const validRoles: UserRole[] = ['superadmin', 'director', 'orientador', 'teacher', 'student'];
+        if (!profileSnapshot.exists() || typeof profile?.role !== 'string' || !validRoles.includes(profile.role as UserRole)) {
+          await signOut(auth);
+          if (active) setCurrentUser(null);
+          return;
+        }
+
+        const role = profile.role as UserRole;
+        if (active) setCurrentUser({
+          id: firebaseUser.uid,
+          username: typeof profile.username === 'string' ? profile.username : (firebaseUser.email || ''),
+          name: typeof profile.name === 'string' ? profile.name : (firebaseUser.displayName || firebaseUser.email || 'Usuario'),
+          email: firebaseUser.email || '',
+          role,
+          avatar: typeof profile.avatar === 'string' ? profile.avatar : '',
+          title: typeof profile.title === 'string' ? profile.title : role,
+          ...(typeof profile.schoolId === 'string' ? { schoolId: profile.schoolId } : {}),
+          ...(typeof profile.linkedEntityId === 'string' ? { linkedEntityId: profile.linkedEntityId } : {}),
+        });
+      } catch (error) {
+        console.error('No se pudo restaurar el perfil escolar:', error);
+        await signOut(auth).catch(() => undefined);
+        if (active) setCurrentUser(null);
+      }
+    });
+    return () => { active = false; unsubscribe(); };
+  }, []);
+
   // Save session state to localStorage
   useEffect(() => {
     if (currentUser) {
@@ -141,14 +170,15 @@ export default function App() {
     localStorage.setItem('aulacontrol_schools', JSON.stringify(schools));
   }, [schools]);
 
-  // Firebase Boot & Realtime Sync
+  // Firebase data access starts only after Firebase Authentication confirms a profile.
+  // Never seed demo students into a real school database automatically.
   useEffect(() => {
-    testFirestoreConnection().then((connected) => {
-      setIsCloudConnected(connected);
-      if (connected) {
-        seedInitialDataIfEmpty(INITIAL_STUDENTS, INITIAL_GROUPS);
-      }
-    });
+    if (!currentUser) {
+      setIsCloudConnected(false);
+      return;
+    }
+
+    testFirestoreConnection().then(setIsCloudConnected);
 
     const unsubscribeStudents = subscribeToStudents((cloudStudents) => {
       if (cloudStudents && cloudStudents.length > 0) {
@@ -178,7 +208,7 @@ export default function App() {
       if (typeof unsubscribeStudents === 'function') unsubscribeStudents();
       if (typeof unsubscribeSchools === 'function') unsubscribeSchools();
     };
-  }, []);
+  }, [currentUser?.id]);
 
   // Helper for notification broadcast
   const pushNotification = (
@@ -741,35 +771,6 @@ export default function App() {
     );
   };
 
-  const handleSwitchToSchoolDirector = (school: SchoolInstitution) => {
-    setCurrentSchool(school);
-    const dir = usersList.find((u) => u.schoolId === school.id || u.email === school.directorEmail) || {
-      id: `usr-dir-${school.id}`,
-      username: school.directorEmail,
-      password: 'director123',
-      name: school.directorName,
-      email: school.directorEmail,
-      role: 'director' as const,
-      avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
-      title: `Director General · ${school.name}`,
-      schoolId: school.id,
-    };
-    setCurrentUser(dir);
-    pushNotification(
-      'info',
-      `Modo Director Activo`,
-      `Has ingresado al panel de dirección de ${school.name}. Aquí puedes estructurar grupos, orientadores y materias.`,
-      'director'
-    );
-  };
-
-  const handleSwitchUserRole = (role: UserRole) => {
-    const user = usersList.find((u) => u.role === role) || MOCK_USERS.find((u) => u.role === role);
-    if (user) {
-      setCurrentUser(user);
-    }
-  };
-
   if (!currentUser) {
     return <LoginView onLoginSuccess={(u) => setCurrentUser(u)} />;
   }
@@ -865,8 +866,7 @@ export default function App() {
         simulatedTime={simulatedTime}
         unreadCount={unreadCount}
         onOpenNotifications={() => setNotificationDrawerOpen(true)}
-        onLogout={() => setCurrentUser(null)}
-        onSwitchUser={handleSwitchUserRole}
+        onLogout={() => { void signOut(auth); }}
       />
 
       {/* Test / Simulation Bar */}
@@ -933,7 +933,6 @@ export default function App() {
             schools={schools}
             onAddSchool={handleAddSchool}
             onUpdateSchool={handleUpdateSchool}
-            onSwitchToSchoolDirector={handleSwitchToSchoolDirector}
           />
         )}
 

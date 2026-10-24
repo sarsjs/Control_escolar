@@ -9,7 +9,6 @@ import {
   UserCheck,
   ShieldCheck,
   Search,
-  ExternalLink,
   Edit3,
   Sliders,
   CheckCircle2,
@@ -28,7 +27,6 @@ interface SuperAdminDashboardViewProps {
   schools: SchoolInstitution[];
   onAddSchool: (school: SchoolInstitution, directorUser: UserAccount) => void;
   onUpdateSchool: (school: SchoolInstitution) => void;
-  onSwitchToSchoolDirector: (school: SchoolInstitution) => void;
 }
 
 export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = ({
@@ -36,7 +34,6 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
   schools,
   onAddSchool,
   onUpdateSchool,
-  onSwitchToSchoolDirector,
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'trial' | 'suspended'>('all');
@@ -418,14 +415,6 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                   <span>Ajustar Cerca / Datos</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => onSwitchToSchoolDirector(school)}
-                  className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-xs flex items-center gap-1.5"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Entrar como Director</span>
-                </button>
               </div>
             </div>
           </div>
