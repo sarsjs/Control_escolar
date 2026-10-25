@@ -525,6 +525,24 @@ export default function App() {
   };
 
   // 11. Orientador updates schedule
+  const handleCreateGroupForOrientador = (name: string, semester: number, turn: 'Matutino' | 'Vespertino') => {
+    if (!currentOrientadorEntity) return;
+    const newGroup: SchoolGroup = {
+      id: `grp-${Date.now()}`,
+      name,
+      semester,
+      turn,
+      orientadorId: currentOrientadorEntity.id,
+      studentIds: [],
+      schedule: [],
+    };
+    setGroups((prev) => [...prev, newGroup]);
+    void syncGroupToCloud(newGroup).catch((error) => console.error('No se pudo guardar el grupo en Firestore:', error));
+    setOrientadores((prev) => prev.map((orientador) => orientador.id === currentOrientadorEntity.id
+      ? { ...orientador, assignedGroupIds: [...orientador.assignedGroupIds, newGroup.id] }
+      : orientador));
+  };
+
   const handleUpdateGroupSchedule = (groupId: string, newSchedule: GroupScheduleItem[]) => {
     const group = groups.find((item) => item.id === groupId);
     if (!group) return;
@@ -577,8 +595,8 @@ export default function App() {
       groupId,
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
       currentStatus: 'outside_school',
-      currentZone: 'Fuera del Plantel (A 2.5 km)',
-      distanceToCampusMeters: 2500,
+      currentZone: 'Sin ubicación registrada',
+      distanceToCampusMeters: 0,
       lastUpdated: simulatedTime,
     }));
 
@@ -796,6 +814,7 @@ export default function App() {
             allTeachers={teachers}
             disputes={disputes}
             simulatedTime={simulatedTime}
+            onCreateGroup={handleCreateGroupForOrientador}
             onUpdateGroupSchedule={handleUpdateGroupSchedule}
             onAddStudentToGroup={handleAddStudentToGroup}
             onImportStudentsCsv={handleImportStudentsCsv}
