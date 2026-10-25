@@ -183,6 +183,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   };
 
   return (
+    <>
       {isCreateGroupOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
           <form onSubmit={handleCreateGroup} className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-xl">
@@ -857,5 +858,6 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
         )}
       </div>
     </div>
+    </>
   );
 };
