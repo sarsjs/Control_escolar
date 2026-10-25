@@ -65,11 +65,11 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   // Modals
   const [isAddPeriodOpen, setIsAddPeriodOpen] = useState<boolean>(false);
   const [subjectName, setSubjectName] = useState<string>('');
-  const [startTime, setStartTime] = useState<string>('13:35');
-  const [endTime, setEndTime] = useState<string>('15:00');
+  const [startTime, setStartTime] = useState<string>('');
+  const [endTime, setEndTime] = useState<string>('');
   const [toleranceMinutes, setToleranceMinutes] = useState<number>(10);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(allTeachers[0]?.id || '');
-  const [classroom, setClassroom] = useState<string>('Aula 105');
+  const [classroom, setClassroom] = useState<string>('');
 
   // Add student
   const [isAddStudentOpen, setIsAddStudentOpen] = useState<boolean>(false);
@@ -78,9 +78,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
 
   // CSV import
   const [isCsvModalOpen, setIsCsvModalOpen] = useState<boolean>(false);
-  const [csvRawText, setCsvRawText] = useState<string>(
-    'Emiliano Vargas Sánchez,2026-B-0910\nValeria Castro Pineda,2026-B-0911\nLuis Fernando Mora,2026-B-0912'
-  );
+  const [csvRawText, setCsvRawText] = useState<string>('');
   const [csvSuccessMessage, setCsvSuccessMessage] = useState<string>('');
 
   const currentGroup = myGroups.find((g) => g.id === selectedGroupId) || myGroups[0];
