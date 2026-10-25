@@ -91,6 +91,7 @@ export interface AttendanceDispute {
 
 export interface Student {
   id: string;
+  schoolId?: string;
   name: string;
   matricula: string;
   groupId: string;
@@ -127,6 +128,7 @@ export interface GroupScheduleItem {
 
 export interface SchoolGroup {
   id: string;
+  schoolId?: string;
   name: string; // e.g. "1º Semestre · Grupo A"
   semester: number;
   turn: 'Matutino' | 'Vespertino';
