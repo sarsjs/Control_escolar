@@ -100,7 +100,7 @@ export default function App() {
   const [orientadores, setOrientadores] = useState<Orientador[]>(MOCK_ORIENTADORES);
   const [teachers, setTeachers] = useState<Teacher[]>(MOCK_TEACHERS);
   const [groups, setGroups] = useState<SchoolGroup[]>(INITIAL_GROUPS);
-  const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
+  const [students, setStudents] = useState<Student[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
   const [disputes, setDisputes] = useState<AttendanceDispute[]>(INITIAL_DISPUTES);
   const [notifications, setNotifications] = useState<SystemNotification[]>(INITIAL_NOTIFICATIONS);
@@ -180,16 +180,9 @@ export default function App() {
 
     testFirestoreConnection().then(setIsCloudConnected);
 
+    // Attendance records must come from Firestore, never from demo fixtures.
     const unsubscribeStudents = subscribeToStudents((cloudStudents) => {
-      if (cloudStudents && cloudStudents.length > 0) {
-        setStudents((prev) => {
-          const map = new Map(prev.map((s) => [s.id, s]));
-          cloudStudents.forEach((cs) => {
-            map.set(cs.id, { ...map.get(cs.id), ...cs });
-          });
-          return Array.from(map.values());
-        });
-      }
+      setStudents(cloudStudents);
     });
 
     const unsubscribeSchools = subscribeToSchools((cloudSchools) => {
