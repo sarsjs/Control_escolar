@@ -85,10 +85,8 @@ const INITIAL_DISPUTES: AttendanceDispute[] = [
 
 export default function App() {
   // Schools State (Multi-tenant SaaS)
-  const [schools, setSchools] = useState<SchoolInstitution[]>(() => {
-    const saved = localStorage.getItem('aulacontrol_schools');
-    return saved ? JSON.parse(saved) : INITIAL_SCHOOLS;
-  });
+  // School records are loaded from Firestore after authentication; never mix cached demo schools into the real tenant list.
+  const [schools, setSchools] = useState<SchoolInstitution[]>([]);
   const [currentSchool, setCurrentSchool] = useState<SchoolInstitution>(schools[0] || INITIAL_SCHOOLS[0]);
   const [usersList, setUsersList] = useState<UserAccount[]>(MOCK_USERS);
 
@@ -185,16 +183,9 @@ export default function App() {
       setStudents(cloudStudents);
     });
 
+    // Firestore is the source of truth, including when a school collection is empty.
     const unsubscribeSchools = subscribeToSchools((cloudSchools) => {
-      if (cloudSchools && cloudSchools.length > 0) {
-        setSchools((prev) => {
-          const map = new Map(prev.map((s) => [s.id, s]));
-          cloudSchools.forEach((cs) => {
-            map.set(cs.id, { ...map.get(cs.id), ...cs });
-          });
-          return Array.from(map.values());
-        });
-      }
+      setSchools(cloudSchools);
     });
 
     return () => {
