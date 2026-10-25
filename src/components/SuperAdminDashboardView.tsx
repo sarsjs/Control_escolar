@@ -25,7 +25,7 @@ import {
 interface SuperAdminDashboardViewProps {
   currentUser: UserAccount;
   schools: SchoolInstitution[];
-  onAddSchool: (school: SchoolInstitution, directorUser: UserAccount) => void;
+  onAddSchool: (school: SchoolInstitution) => void;
   onUpdateSchool: (school: SchoolInstitution) => void;
 }
 
@@ -42,14 +42,12 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
 
   // Form state for creating new school
   const [formName, setFormName] = useState<string>('');
-  const [formLogo, setFormLogo] = useState<string>(
-    'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=150&auto=format&fit=crop&q=80'
-  );
+  const [formLogo, setFormLogo] = useState<string>('');
   const [formCct, setFormCct] = useState<string>('');
   const [formAddress, setFormAddress] = useState<string>('');
   const [formEntryTime, setFormEntryTime] = useState<string>('07:00 AM');
-  const [formLat, setFormLat] = useState<number>(19.4326);
-  const [formLng, setFormLng] = useState<number>(-99.1332);
+  const [formLat, setFormLat] = useState<number>(0);
+  const [formLng, setFormLng] = useState<number>(0);
   const [formGeofenceRadius, setFormGeofenceRadius] = useState<number>(120);
   const [formPlan, setFormPlan] = useState<'Piloto' | 'Estándar' | 'Enterprise'>('Estándar');
   const [formMaxStudents, setFormMaxStudents] = useState<number>(800);
@@ -58,7 +56,6 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
   const [formDirectorName, setFormDirectorName] = useState<string>('');
   const [formDirectorEmail, setFormDirectorEmail] = useState<string>('');
   const [formDirectorPhone, setFormDirectorPhone] = useState<string>('');
-  const [formDirectorPassword, setFormDirectorPassword] = useState<string>('director123');
 
   // Filtered schools
   const filteredSchools = schools.filter((s) => {
@@ -99,14 +96,14 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
       slug: formName.toLowerCase().replace(/\s+/g, '-').slice(0, 20),
       logo: formLogo,
       cct: formCct.toUpperCase(),
-      address: formAddress || 'Dirección General de Campus',
+      address: formAddress,
       entryTime: formEntryTime,
       latitude: formLat,
       longitude: formLng,
       geofenceRadiusMeters: formGeofenceRadius,
       directorName: formDirectorName,
       directorEmail: formDirectorEmail,
-      directorPhone: formDirectorPhone || '+52 (55) 0000-0000',
+      directorPhone: formDirectorPhone,
       directorUsername: formDirectorEmail,
       status: 'active',
       createdAt: new Date().toISOString().split('T')[0],
@@ -116,19 +113,9 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
       groupsCount: 0,
     };
 
-    const newDirectorUser: UserAccount = {
-      id: `usr-dir-${Date.now()}`,
-      username: formDirectorEmail,
-      password: formDirectorPassword,
-      name: formDirectorName,
-      email: formDirectorEmail,
-      role: 'director',
-      avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
-      title: `Director General · ${formName}`,
-      schoolId: newSchoolId,
-    };
 
-    onAddSchool(newSchool, newDirectorUser);
+
+    onAddSchool(newSchool);
     setIsAddModalOpen(false);
     resetForm();
   };
@@ -393,7 +380,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
 
                 <div className="text-right">
                   <span className="text-[10px] text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md font-mono">
-                    Acceso: {school.directorUsername}
+                    Correo del director: {school.directorEmail}
                   </span>
                 </div>
               </div>
@@ -650,22 +637,12 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                       type="text"
                       value={formDirectorPhone}
                       onChange={(e) => setFormDirectorPhone(e.target.value)}
-                      placeholder="+52 (55) 4321-9876"
+                      placeholder="Teléfono del plantel o director"
                       className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl font-mono"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Contraseña Temporal
-                    </label>
-                    <input
-                      type="text"
-                      value={formDirectorPassword}
-                      onChange={(e) => setFormDirectorPassword(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl font-mono text-xs"
-                    />
-                  </div>
+
                 </div>
               </div>
 
@@ -682,7 +659,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                   type="submit"
                   className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98]"
                 >
-                  Guardar Escuela y Crear Director
+                  Guardar plantel
                 </button>
               </div>
             </form>
