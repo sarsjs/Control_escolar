@@ -189,15 +189,16 @@ export default function App() {
     testFirestoreConnection().then(setIsCloudConnected);
 
     // Attendance records must come from Firestore, never from demo fixtures.
-    const unsubscribeStudents = subscribeToStudents((cloudStudents) => {
+    const isSuperAdmin = currentUser.role === 'superadmin';
+    const unsubscribeStudents = subscribeToStudents(currentUser.schoolId, isSuperAdmin, (cloudStudents) => {
       setStudents(cloudStudents);
     });
-    const unsubscribeGroups = subscribeToGroups((cloudGroups) => {
+    const unsubscribeGroups = subscribeToGroups(currentUser.schoolId, isSuperAdmin, (cloudGroups) => {
       setGroups(cloudGroups);
     });
 
     // Firestore is the source of truth, including when a school collection is empty.
-    const unsubscribeSchools = subscribeToSchools((cloudSchools) => {
+    const unsubscribeSchools = subscribeToSchools(currentUser.schoolId, isSuperAdmin, (cloudSchools) => {
       setSchools(cloudSchools);
     });
 
@@ -611,7 +612,8 @@ export default function App() {
       name,
       matricula,
       groupId,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      ...(groups.find((group) => group.id === groupId)?.schoolId ? { schoolId: groups.find((group) => group.id === groupId)?.schoolId } : currentUser?.schoolId ? { schoolId: currentUser.schoolId } : {}),
+      avatar: '',
       currentStatus: 'outside_school',
       currentZone: 'Sin ubicación registrada',
       distanceToCampusMeters: 0,
@@ -637,7 +639,8 @@ export default function App() {
       name: row.name,
       matricula: row.matricula,
       groupId,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      ...(groups.find((group) => group.id === groupId)?.schoolId ? { schoolId: groups.find((group) => group.id === groupId)?.schoolId } : currentUser?.schoolId ? { schoolId: currentUser.schoolId } : {}),
+      avatar: '',
       currentStatus: 'outside_school',
       currentZone: 'Sin ubicación registrada',
       distanceToCampusMeters: 0,
