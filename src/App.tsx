@@ -551,12 +551,13 @@ export default function App() {
       groupId,
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
       currentStatus: 'outside_school',
-      currentZone: 'Fuera del Plantel (A 2.5 km)',
-      distanceToCampusMeters: 2500,
+      currentZone: 'Sin ubicación registrada',
+      distanceToCampusMeters: 0,
       lastUpdated: simulatedTime,
     };
 
     setStudents((prev) => [...prev, newStudent]);
+    void syncStudentToCloud(newStudent).catch((error) => console.error('No se pudo guardar el alumno en Firestore:', error));
     setGroups((prev) =>
       prev.map((g) => {
         if (g.id !== groupId) return g;
@@ -582,6 +583,9 @@ export default function App() {
     }));
 
     setStudents((prev) => [...prev, ...newStudents]);
+    newStudents.forEach((student) => {
+      void syncStudentToCloud(student).catch((error) => console.error('No se pudo guardar el alumno importado en Firestore:', error));
+    });
     setGroups((prev) =>
       prev.map((g) => {
         if (g.id !== groupId) return g;
