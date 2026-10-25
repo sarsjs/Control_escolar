@@ -770,6 +770,7 @@ export default function App() {
       />
 
       {/* ETA Prompt Modal */}
+      {currentStudent && studentActiveClass && (
       <EtaPromptModal
         isOpen={etaModalOpen}
         onClose={() => setEtaModalOpen(false)}
@@ -779,25 +780,30 @@ export default function App() {
         orientador={studentOrientador}
         studentName={currentStudent?.name || ''}
       />
+      )}
 
       {/* Classroom Check-in Modal */}
+      {currentStudent && studentActiveClass && (
       <ClassCheckinModal
         isOpen={checkinModalOpen}
         onClose={() => setCheckinModalOpen(false)}
         activeClass={studentActiveClass}
         onConfirmAttendance={handleConfirmAttendance}
       />
+      )}
 
       {/* Student Dispute / Correction Request Modal */}
+      {currentStudent && studentGroup && (
       <DisputeModal
         isOpen={disputeModalOpen}
         onClose={() => setDisputeModalOpen(false)}
         studentName={currentStudent?.name || ''}
         studentId={currentStudent?.id || ''}
         groupId={currentStudent?.groupId || ''}
-        activeSubjectName={studentActiveClass?.subjectName || 'Matemáticas II'}
+        activeSubjectName={studentActiveClass?.subjectName || ''}
         onSubmitDispute={handleStudentSubmitDispute}
       />
+      )}
 
       {/* Navbar with role switcher and logout */}
       <Navbar
