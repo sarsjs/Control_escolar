@@ -94,13 +94,12 @@ export function subscribeToStudents(onUpdate: (students: Student[]) => void) {
     const unsubscribe = onSnapshot(
       collection(db, path),
       (snapshot) => {
-        if (!snapshot.empty) {
-          const list: Student[] = [];
-          snapshot.forEach((d) => {
-            list.push(d.data() as Student);
-          });
-          onUpdate(list);
-        }
+        const list: Student[] = [];
+        snapshot.forEach((d) => {
+          list.push(d.data() as Student);
+        });
+        // An empty collection is meaningful: clear stale or demo attendance rows.
+        onUpdate(list);
       },
       (error) => {
         console.warn('Firestore realtime student subscription fallback:', error);
