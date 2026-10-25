@@ -17,16 +17,7 @@ import {
   ValidationMethod,
   SchoolInstitution,
 } from './types';
-import {
-  MOCK_USERS,
-  MOCK_ORIENTADORES,
-  MOCK_TEACHERS,
-  INITIAL_GROUPS,
-  INITIAL_STUDENTS,
-  INITIAL_NOTIFICATIONS,
-  INITIAL_SCHOOLS,
-  INSTITUTION_INFO,
-} from './data/mockData';
+/* Real school records are loaded from Firestore; mock fixtures are intentionally not imported. */
 import { Navbar } from './components/Navbar';
 import { LoginView } from './components/LoginView';
 import { StudentAppView } from './components/StudentAppView';
@@ -34,13 +25,12 @@ import { TeacherDashboardView } from './components/TeacherDashboardView';
 import { OrientadorDashboardView } from './components/OrientadorDashboardView';
 import { DirectorDashboardView } from './components/DirectorDashboardView';
 import { SuperAdminDashboardView } from './components/SuperAdminDashboardView';
-import { SimulationControls } from './components/SimulationControls';
 import { EtaPromptModal } from './components/EtaPromptModal';
 import { ClassCheckinModal } from './components/ClassCheckinModal';
 import { DisputeModal } from './components/DisputeModal';
 import { NotificationToast } from './components/NotificationToast';
 import { NotificationDrawer } from './components/NotificationDrawer';
-import { Sparkles, Cloud, CloudCheck } from 'lucide-react';
+import { Cloud, CloudCheck } from 'lucide-react';
 import {
   testFirestoreConnection,
   syncStudentToCloud,
@@ -52,56 +42,25 @@ import {
   subscribeToSchools,
 } from './utils/firebaseSync';
 
-const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
-  {
-    id: 'aud-001',
-    attendanceId: 'att-diego-1',
-    studentId: 'stu-diego',
-    studentName: 'Diego Navarro Gil',
-    groupId: 'grp-2b',
-    subjectName: 'Matemáticas II',
-    previousStatus: 'outside_school',
-    newStatus: 'in_class',
-    modifiedBy: 'Prof. Roberto Gómez',
-    modifiedByRole: 'teacher',
-    reason: 'Falla temporal de BLE; validación manual por lista firmada en pizarrón.',
-    timestamp: '06:54 AM',
-  },
-];
-
-const INITIAL_DISPUTES: AttendanceDispute[] = [
-  {
-    id: 'disp-001',
-    attendanceId: 'att-mateo-1',
-    studentId: 'stu-mateo',
-    studentName: 'Mateo Fernández Solís',
-    groupId: 'grp-2b',
-    subjectName: 'Matemáticas II',
-    date: '2026-10-22',
-    studentReason: 'Llegué a tiempo pero mi Bluetooth estuvo desconectado al entrar al aula 102.',
-    status: 'pending',
-  },
-];
-
 export default function App() {
   // Schools State (Multi-tenant SaaS)
   // School records are loaded from Firestore after authentication; never mix cached demo schools into the real tenant list.
   const [schools, setSchools] = useState<SchoolInstitution[]>([]);
-  const [currentSchool, setCurrentSchool] = useState<SchoolInstitution>(schools[0] || INITIAL_SCHOOLS[0]);
-  const [usersList, setUsersList] = useState<UserAccount[]>(MOCK_USERS);
+  const [currentSchool, setCurrentSchool] = useState<SchoolInstitution | null>(null);
+  const [usersList, setUsersList] = useState<UserAccount[]>([]);
 
   // Never grant a role from localStorage alone. A session must start at the login screen.
   // The cached profile is not an authentication credential and can be edited by the browser user.
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
 
   // Master Academic State with Local Storage persistence
-  const [orientadores, setOrientadores] = useState<Orientador[]>(MOCK_ORIENTADORES);
-  const [teachers, setTeachers] = useState<Teacher[]>(MOCK_TEACHERS);
-  const [groups, setGroups] = useState<SchoolGroup[]>(INITIAL_GROUPS);
+  const [orientadores, setOrientadores] = useState<Orientador[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [groups, setGroups] = useState<SchoolGroup[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
-  const [disputes, setDisputes] = useState<AttendanceDispute[]>(INITIAL_DISPUTES);
-  const [notifications, setNotifications] = useState<SystemNotification[]>(INITIAL_NOTIFICATIONS);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [disputes, setDisputes] = useState<AttendanceDispute[]>([]);
+  const [notifications, setNotifications] = useState<SystemNotification[]>([]);
 
   // Time & Simulation
   const [simulatedTime, setSimulatedTime] = useState<string>('07:05 AM');
@@ -224,30 +183,34 @@ export default function App() {
   };
 
   // Primary active student (Sofía Morales)
-  const currentStudent = students.find((s) => s.id === 'stu-sofia') || students[0];
-  const studentGroup = groups.find((g) => g.id === currentStudent?.groupId) || groups[0];
-  const studentOrientador = orientadores.find(
-    (o) =>
-      o.id === studentGroup.orientadorId ||
-      o.id === studentGroup.temporarySubstituteOrientadorId
-  );
-  const studentActiveClass = studentGroup.schedule[0];
+  const currentStudent = currentUser?.role === 'student'
+    ? students.find((s) => s.id === currentUser.linkedEntityId)
+    : undefined;
+  const studentGroup = currentStudent
+    ? groups.find((g) => g.id === currentStudent.groupId)
+    : undefined;
+  const studentOrientador = studentGroup
+    ? orientadores.find((o) => o.id === studentGroup.orientadorId || o.id === studentGroup.temporarySubstituteOrientadorId)
+    : undefined;
+  const studentActiveClass = studentGroup?.schedule?.[0];
 
   // Primary active teacher
-  const currentTeacherUser = currentUser?.role === 'teacher' ? currentUser : MOCK_USERS[4];
-  const teacherAssignedGroups = groups.filter((g) =>
-    g.schedule.some((s) => s.teacherId === currentTeacherUser.linkedEntityId || s.teacherName.includes('Roberto'))
-  );
-  const [activeTeacherGroup, setActiveTeacherGroup] = useState<SchoolGroup>(
-    teacherAssignedGroups[0] || groups[0]
-  );
+  const currentTeacherUser = currentUser?.role === 'teacher' ? currentUser : undefined;
+  const teacherAssignedGroups = currentTeacherUser
+    ? groups.filter((g) => g.schedule.some((s) => s.teacherId === currentTeacherUser.linkedEntityId))
+    : [];
+  const [activeTeacherGroup, setActiveTeacherGroup] = useState<SchoolGroup | null>(null);
+  useEffect(() => {
+    if (!activeTeacherGroup && teacherAssignedGroups.length > 0) setActiveTeacherGroup(teacherAssignedGroups[0]);
+    else if (activeTeacherGroup && !teacherAssignedGroups.some((g) => g.id === activeTeacherGroup.id)) setActiveTeacherGroup(teacherAssignedGroups[0] || null);
+  }, [teacherAssignedGroups, activeTeacherGroup]);
 
   // Primary active orientador (Strict isolation per user)
-  const currentOrientadorEntity =
-    orientadores.find((o) => o.id === currentUser?.linkedEntityId) || orientadores[0];
+  const currentOrientadorEntity = orientadores.find((o) => o.id === currentUser?.linkedEntityId);
 
   // 1. Student ETA submission (routes to Orientador + Teacher)
   const handleStudentSubmitEta = (minutes: number, reason: string) => {
+    if (!currentStudent || !studentGroup) return;
     const updatedStudent: Student = {
       ...currentStudent,
       currentStatus: 'en_route_delayed',
@@ -296,6 +259,7 @@ export default function App() {
 
   // 2. Student crosses school gate (GPS triggers presence in campus)
   const handleCrossGate = () => {
+    if (!currentStudent || !studentGroup) return;
     const updatedStudent: Student = {
       ...currentStudent,
       currentStatus: 'on_campus_not_in_class',
@@ -339,6 +303,7 @@ export default function App() {
 
   // 3. Student leaves campus
   const handleLeaveCampus = () => {
+    if (!currentStudent || !studentGroup) return;
     const updatedStudent: Student = {
       ...currentStudent,
       currentStatus: 'outside_school',
@@ -357,6 +322,7 @@ export default function App() {
 
   // 4. Confirm classroom attendance via BLE, PIN, or QR
   const handleConfirmAttendance = (method: ValidationMethod, validatedCode?: string) => {
+    if (!currentStudent || !studentGroup) return;
     const updatedStudent: Student = {
       ...currentStudent,
       currentStatus: 'in_class',
@@ -434,6 +400,7 @@ export default function App() {
 
   // 6. Student submits dispute / review request
   const handleStudentSubmitDispute = (reason: string) => {
+    if (!currentStudent || !studentGroup) return;
     const newDispute: AttendanceDispute = {
       id: `disp-${Date.now()}`,
       attendanceId: `att-${currentStudent.id}-${Date.now()}`,
@@ -535,25 +502,7 @@ export default function App() {
       turn: 'Matutino',
       orientadorId,
       studentIds: [],
-      schedule: [
-        {
-          id: `sch-${Date.now()}-1`,
-          dayOfWeek: 'Lunes a Viernes',
-          startTime: '07:00',
-          endTime: '08:30',
-          toleranceMinutes: 10,
-          subjectName: 'Matemáticas Generales',
-          subjectCode: 'MAT-100',
-          teacherId: teachers[0].id,
-          teacherName: teachers[0].name,
-          teacherAvatar: teachers[0].avatar,
-          classroom: 'Aula 104',
-          building: 'Edificio A',
-          currentPin: '5812',
-          beaconUuid: 'e2c56db5-dffb-48d2-b060-d0f5a71096a9',
-          color: '#2563eb',
-        },
-      ],
+      schedule: [],
     };
 
     setGroups((prev) => [...prev, newGroup]);
@@ -628,6 +577,7 @@ export default function App() {
 
   // 14. Teacher regenerates PIN
   const handleRegeneratePin = () => {
+    if (!activeTeacherGroup) return;
     const newCode = Math.floor(1000 + Math.random() * 9000).toString();
     setGroups((prev) =>
       prev.map((g) => {
@@ -653,6 +603,7 @@ export default function App() {
 
   // 16. Step-by-Step Simulation Scenario
   const handleRunScenarioStep = (stepNumber: number) => {
+    if (!currentStudent || !studentGroup || !studentActiveClass) return;
     setSimulationStep(stepNumber);
 
     if (stepNumber === 1) {
@@ -717,12 +668,15 @@ export default function App() {
   };
 
   const handleResetSimulation = () => {
-    setStudents(INITIAL_STUDENTS);
-    setGroups(INITIAL_GROUPS);
-    setOrientadores(MOCK_ORIENTADORES);
+    setStudents([]);
+    setGroups([]);
+    setOrientadores([]);
+    setTeachers([]);
+    setAuditLogs([]);
+    setDisputes([]);
     setSimulatedTime('07:05 AM');
     setSimulationStep(1);
-    setNotifications(INITIAL_NOTIFICATIONS);
+    setNotifications([]);
     setEtaModalOpen(false);
     setCheckinModalOpen(false);
     setDisputeModalOpen(false);
@@ -730,6 +684,7 @@ export default function App() {
 
   // 17. SaaS Multi-School Handlers (Dueño de la App)
   const handleAddSchool = (newSchool: SchoolInstitution, directorUser: UserAccount) => {
+    setCurrentSchool(newSchool);
     setSchools((prev) => [newSchool, ...prev]);
     setUsersList((prev) => [directorUser, ...prev]);
     syncSchoolToCloud(newSchool);
@@ -743,7 +698,7 @@ export default function App() {
 
   const handleUpdateSchool = (updatedSchool: SchoolInstitution) => {
     setSchools((prev) => prev.map((s) => (s.id === updatedSchool.id ? updatedSchool : s)));
-    if (currentSchool.id === updatedSchool.id) {
+    if (currentSchool?.id === updatedSchool.id) {
       setCurrentSchool(updatedSchool);
     }
     syncSchoolToCloud(updatedSchool);
@@ -819,10 +774,10 @@ export default function App() {
         isOpen={etaModalOpen}
         onClose={() => setEtaModalOpen(false)}
         onSubmitEta={handleStudentSubmitEta}
-        entryTime={INSTITUTION_INFO.entryTime}
+        entryTime={currentSchool?.entryTime || ''}
         activeClass={studentActiveClass}
         orientador={studentOrientador}
-        studentName={currentStudent.name}
+        studentName={currentStudent?.name || ''}
       />
 
       {/* Classroom Check-in Modal */}
@@ -837,9 +792,9 @@ export default function App() {
       <DisputeModal
         isOpen={disputeModalOpen}
         onClose={() => setDisputeModalOpen(false)}
-        studentName={currentStudent.name}
-        studentId={currentStudent.id}
-        groupId={currentStudent.groupId}
+        studentName={currentStudent?.name || ''}
+        studentId={currentStudent?.id || ''}
+        groupId={currentStudent?.groupId || ''}
         activeSubjectName={studentActiveClass?.subjectName || 'Matemáticas II'}
         onSubmitDispute={handleStudentSubmitDispute}
       />
@@ -853,60 +808,7 @@ export default function App() {
         onLogout={() => { void signOut(auth); }}
       />
 
-      {/* Test / Simulation Bar */}
-      <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 text-white">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-indigo-400 font-bold uppercase tracking-wider text-[11px]">
-              Ciclo de Asistencia:
-            </span>
-            <span className="text-slate-300 hidden sm:inline">Paso {simulationStep} de 5:</span>
-            <span className="font-semibold text-white">
-              {simulationStep === 1 && 'Alumno fuera de escuela · Alerta de entrada'}
-              {simulationStep === 2 && 'Alumno reportó ETA de 15m · Orientador y Profesor notificados'}
-              {simulationStep === 3 && 'Llegada al plantel por GPS · No en clase aún'}
-              {simulationStep === 4 && 'Confirmación en aula por BLE · Asistencia oficial'}
-              {simulationStep === 5 && 'Cambio de materia a Física · Nueva validación requerida'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isCloudConnected ? (
-              <span
-                title="Sincronizado en tiempo real con Firebase Firestore"
-                className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-lg border border-emerald-500/30 shadow-2xs"
-              >
-                <CloudCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Nube: Firestore Activo</span>
-              </span>
-            ) : (
-              <span
-                title="Modo local con sincronización diferida"
-                className="inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-400 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700"
-              >
-                <Cloud className="w-3.5 h-3.5 text-slate-400" />
-                <span>Nube: Conectando...</span>
-              </span>
-            )}
-
-            <button
-              type="button"
-              onClick={() => handleRunScenarioStep(simulationStep < 5 ? simulationStep + 1 : 1)}
-              className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Avanzar Paso ({simulationStep < 5 ? simulationStep + 1 : 1})</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleResetSimulation}
-              className="text-slate-400 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              Reiniciar
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Simulation UI removed: the app starts with real school data only. */}
 
       {/* Main Role-Specific View */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -940,7 +842,7 @@ export default function App() {
         )}
 
         {/* ROLE 2: ORIENTADOR */}
-        {currentUser.role === 'orientador' && (
+        {currentUser.role === 'orientador' && currentOrientadorEntity && (
           <OrientadorDashboardView
             orientador={currentOrientadorEntity}
             allGroups={groups}
@@ -965,7 +867,7 @@ export default function App() {
         )}
 
         {/* ROLE 3: DOCENTE */}
-        {currentUser.role === 'teacher' && (
+        {currentUser.role === 'teacher' && activeTeacherGroup && (
           <TeacherDashboardView
             teacher={currentUser}
             activeGroup={activeTeacherGroup}
@@ -987,7 +889,7 @@ export default function App() {
         )}
 
         {/* ROLE 4: ALUMNO */}
-        {currentUser.role === 'student' && (
+        {currentUser.role === 'student' && currentStudent && studentGroup && studentActiveClass && (
           <StudentAppView
             student={currentStudent}
             studentGroup={studentGroup}
@@ -1000,12 +902,24 @@ export default function App() {
             onSimulateCrossGate={handleCrossGate}
           />
         )}
+        {currentUser.role === 'student' && (!currentStudent || !studentGroup || !studentActiveClass) && (
+          <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Tu perfil escolar aún no está configurado</h2>
+            <p className="mt-2 text-sm text-slate-600">Cuando la escuela te inscriba en un grupo y tenga un horario asignado, aquí aparecerá tu información real.</p>
+          </div>
+        )}
+        {currentUser.role === 'teacher' && !activeTeacherGroup && (
+          <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Todavía no tienes grupos asignados</h2>
+            <p className="mt-2 text-sm text-slate-600">Cuando se cree un grupo y se te asigne una clase, aparecerá aquí.</p>
+          </div>
+        )}
       </main>
 
       {/* Footer */}
       <footer className="mt-auto border-t border-slate-200 bg-white py-4 px-6 text-center text-xs text-slate-500">
         <p>
-          {INSTITUTION_INFO.name} · {INSTITUTION_INFO.tagline} · Sesión activa: {currentUser.name} ({currentUser.title})
+          AulaControl · Sistema de asistencia escolar · Sesión activa: {currentUser.name} ({currentUser.title})
         </p>
       </footer>
     </div>
