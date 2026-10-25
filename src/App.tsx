@@ -688,15 +688,14 @@ export default function App() {
   };
 
   // 17. SaaS Multi-School Handlers (Dueño de la App)
-  const handleAddSchool = (newSchool: SchoolInstitution, directorUser: UserAccount) => {
+  const handleAddSchool = (newSchool: SchoolInstitution) => {
     setCurrentSchool(newSchool);
     setSchools((prev) => [newSchool, ...prev]);
-    setUsersList((prev) => [directorUser, ...prev]);
-    syncSchoolToCloud(newSchool);
+    void syncSchoolToCloud(newSchool).catch((error) => console.error('No se pudo guardar el plantel en Firestore:', error));
     pushNotification(
       'info',
       'Nuevo Plantel Escolar Afiliado',
-      `Se registró la escuela ${newSchool.name} (CCT: ${newSchool.cct}) y se generó el Director ${directorUser.name}.`,
+      `Se registró el plantel ${newSchool.name} (CCT: ${newSchool.cct}). El acceso del director deberá aprovisionarse por Firebase Authentication.`,
       'superadmin'
     );
   };
