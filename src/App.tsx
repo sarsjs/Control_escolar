@@ -40,6 +40,8 @@ import {
   subscribeToStudents,
   syncSchoolToCloud,
   subscribeToSchools,
+  syncGroupToCloud,
+  subscribeToGroups,
 } from './utils/firebaseSync';
 
 export default function App() {
@@ -148,6 +150,9 @@ export default function App() {
     const unsubscribeStudents = subscribeToStudents((cloudStudents) => {
       setStudents(cloudStudents);
     });
+    const unsubscribeGroups = subscribeToGroups((cloudGroups) => {
+      setGroups(cloudGroups);
+    });
 
     // Firestore is the source of truth, including when a school collection is empty.
     const unsubscribeSchools = subscribeToSchools((cloudSchools) => {
@@ -156,6 +161,7 @@ export default function App() {
 
     return () => {
       if (typeof unsubscribeStudents === 'function') unsubscribeStudents();
+      if (typeof unsubscribeGroups === 'function') unsubscribeGroups();
       if (typeof unsubscribeSchools === 'function') unsubscribeSchools();
     };
   }, [currentUser?.id]);
@@ -510,6 +516,7 @@ export default function App() {
     };
 
     setGroups((prev) => [...prev, newGroup]);
+    void syncGroupToCloud(newGroup).catch((error) => console.error('No se pudo guardar el grupo en Firestore:', error));
     setOrientadores((prev) =>
       prev.map((o) =>
         o.id === orientadorId ? { ...o, assignedGroupIds: [...o.assignedGroupIds, newId] } : o
@@ -519,9 +526,11 @@ export default function App() {
 
   // 11. Orientador updates schedule
   const handleUpdateGroupSchedule = (groupId: string, newSchedule: GroupScheduleItem[]) => {
-    setGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, schedule: newSchedule } : g))
-    );
+    const group = groups.find((item) => item.id === groupId);
+    if (!group) return;
+    const updatedGroup = { ...group, schedule: newSchedule };
+    setGroups((prev) => prev.map((g) => (g.id === groupId ? updatedGroup : g)));
+    void syncGroupToCloud(updatedGroup).catch((error) => console.error('No se pudo guardar el horario en Firestore:', error));
 
     pushNotification(
       'schedule_updated',
@@ -549,9 +558,12 @@ export default function App() {
 
     setStudents((prev) => [...prev, newStudent]);
     setGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId ? { ...g, studentIds: [...g.studentIds, newStudentId] } : g
-      )
+      prev.map((g) => {
+        if (g.id !== groupId) return g;
+        const updatedGroup = { ...g, studentIds: [...g.studentIds, newStudentId] };
+        void syncGroupToCloud(updatedGroup).catch((error) => console.error('No se pudo actualizar la lista del grupo en Firestore:', error));
+        return updatedGroup;
+      })
     );
   };
 
@@ -571,11 +583,12 @@ export default function App() {
 
     setStudents((prev) => [...prev, ...newStudents]);
     setGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId
-          ? { ...g, studentIds: [...g.studentIds, ...newStudents.map((s) => s.id)] }
-          : g
-      )
+      prev.map((g) => {
+        if (g.id !== groupId) return g;
+        const updatedGroup = { ...g, studentIds: [...g.studentIds, ...newStudents.map((s) => s.id)] };
+        void syncGroupToCloud(updatedGroup).catch((error) => console.error('No se pudo actualizar la lista del grupo en Firestore:', error));
+        return updatedGroup;
+      })
     );
   };
 
