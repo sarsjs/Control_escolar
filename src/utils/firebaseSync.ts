@@ -151,13 +151,12 @@ export function subscribeToSchools(onUpdate: (schools: SchoolInstitution[]) => v
     const unsubscribe = onSnapshot(
       collection(db, path),
       (snapshot) => {
-        if (!snapshot.empty) {
-          const list: SchoolInstitution[] = [];
-          snapshot.forEach((d) => {
-            list.push(d.data() as SchoolInstitution);
-          });
-          onUpdate(list);
-        }
+        const list: SchoolInstitution[] = [];
+        snapshot.forEach((d) => {
+          list.push(d.data() as SchoolInstitution);
+        });
+        // An empty collection must clear stale local state; never preserve old schools.
+        onUpdate(list);
       },
       (error) => {
         console.warn('Firestore realtime schools subscription fallback:', error);
