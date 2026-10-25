@@ -103,17 +103,59 @@ export default function App() {
         }
 
         const role = profile.role as UserRole;
-        if (active) setCurrentUser({
-          id: firebaseUser.uid,
-          username: typeof profile.username === 'string' ? profile.username : (firebaseUser.email || ''),
-          name: typeof profile.name === 'string' ? profile.name : (firebaseUser.displayName || firebaseUser.email || 'Usuario'),
-          email: firebaseUser.email || '',
-          role,
-          avatar: typeof profile.avatar === 'string' ? profile.avatar : '',
-          title: typeof profile.title === 'string' ? profile.title : role,
-          ...(typeof profile.schoolId === 'string' ? { schoolId: profile.schoolId } : {}),
-          ...(typeof profile.linkedEntityId === 'string' ? { linkedEntityId: profile.linkedEntityId } : {}),
-        });
+        const profileName = typeof profile.name === 'string'
+          ? profile.name
+          : (firebaseUser.displayName || firebaseUser.email || 'Usuario');
+        const profileAvatar = typeof profile.avatar === 'string' ? profile.avatar : '';
+        const schoolId = typeof profile.schoolId === 'string' ? profile.schoolId : undefined;
+        const linkedEntityId = typeof profile.linkedEntityId === 'string' ? profile.linkedEntityId : undefined;
+
+        if (active) {
+          setCurrentUser({
+            id: firebaseUser.uid,
+            username: typeof profile.username === 'string' ? profile.username : (firebaseUser.email || ''),
+            name: profileName,
+            email: firebaseUser.email || '',
+            role,
+            avatar: profileAvatar,
+            title: typeof profile.title === 'string' ? profile.title : role,
+            ...(schoolId ? { schoolId } : {}),
+            ...(linkedEntityId ? { linkedEntityId } : {}),
+          });
+
+          // Hydrate the signed-in staff member's own operational profile from the
+          // authenticated Firestore profile; never fall back to sample staff records.
+          if (role === 'orientador' && linkedEntityId) {
+            setOrientadores((prev) => {
+              const current = {
+                id: linkedEntityId,
+                name: profileName,
+                email: firebaseUser.email || '',
+                avatar: profileAvatar,
+                phone: typeof profile.phone === 'string' ? profile.phone : '',
+                cubicle: typeof profile.cubicle === 'string' ? profile.cubicle : '',
+                assignedGroupIds: Array.isArray(profile.assignedGroupIds)
+                  ? profile.assignedGroupIds.filter((id: unknown): id is string => typeof id === 'string')
+                  : [],
+              };
+              return [...prev.filter((item) => item.id !== linkedEntityId), current];
+            });
+          } else if (role === 'teacher' && linkedEntityId) {
+            setTeachers((prev) => {
+              const current = {
+                id: linkedEntityId,
+                name: profileName,
+                email: firebaseUser.email || '',
+                avatar: profileAvatar,
+                specialty: typeof profile.specialty === 'string' ? profile.specialty : '',
+                assignedGroupIds: Array.isArray(profile.assignedGroupIds)
+                  ? profile.assignedGroupIds.filter((id: unknown): id is string => typeof id === 'string')
+                  : [],
+              };
+              return [...prev.filter((item) => item.id !== linkedEntityId), current];
+            });
+          }
+        }
       } catch (error) {
         console.error('No se pudo restaurar el perfil escolar:', error);
         await signOut(auth).catch(() => undefined);
