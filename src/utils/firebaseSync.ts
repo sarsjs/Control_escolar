@@ -38,6 +38,24 @@ export async function seedInitialDataIfEmpty(
 }
 
 /**
+ * Save a real school group to Firestore.
+ */
+export async function syncGroupToCloud(group: SchoolGroup) {
+  await setDoc(doc(db, 'groups', group.id), group, { merge: true });
+}
+
+/**
+ * Subscribe to real-time school group updates.
+ */
+export function subscribeToGroups(onUpdate: (groups: SchoolGroup[]) => void) {
+  return onSnapshot(
+    collection(db, 'groups'),
+    (snapshot) => onUpdate(snapshot.docs.map((item) => item.data() as SchoolGroup)),
+    (error) => console.warn('Firestore realtime group subscription error:', error)
+  );
+}
+
+/**
  * Sync single student update to Firestore
  */
 export async function syncStudentToCloud(student: Student) {
