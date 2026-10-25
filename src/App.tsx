@@ -62,9 +62,16 @@ export default function App() {
   const [disputes, setDisputes] = useState<AttendanceDispute[]>([]);
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
 
-  // Time & Simulation
-  const [simulatedTime, setSimulatedTime] = useState<string>('07:05 AM');
-  const [simulationStep, setSimulationStep] = useState<number>(1);
+  // Use the device's real local time for audit and notification timestamps.
+  const [simulatedTime, setSimulatedTime] = useState<string>(() =>
+    new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+  );
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setSimulatedTime(new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }));
+    }, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   // Modals
   const [etaModalOpen, setEtaModalOpen] = useState<boolean>(false);
@@ -254,7 +261,6 @@ export default function App() {
       );
     }
 
-    setSimulationStep(2);
   };
 
   // 2. Student crosses school gate (GPS triggers presence in campus)
@@ -298,7 +304,6 @@ export default function App() {
       );
     }
 
-    setSimulationStep(3);
   };
 
   // 3. Student leaves campus
@@ -344,7 +349,6 @@ export default function App() {
       'all'
     );
 
-    setSimulationStep(4);
   };
 
   // 5. Director corrects attendance with immutable audit logging
@@ -599,87 +603,6 @@ export default function App() {
       'in_class',
       'Pase de lista presencial por el docente en el aula.'
     );
-  };
-
-  // 16. Step-by-Step Simulation Scenario
-  const handleRunScenarioStep = (stepNumber: number) => {
-    if (!currentStudent || !studentGroup || !studentActiveClass) return;
-    setSimulationStep(stepNumber);
-
-    if (stepNumber === 1) {
-      setSimulatedTime('07:05 AM');
-      setStudents((prev) =>
-        prev.map((s) =>
-          s.id === currentStudent.id
-            ? {
-                ...s,
-                currentStatus: 'outside_school',
-                currentZone: 'Fuera del Plantel (A 2.1 km)',
-                distanceToCampusMeters: 2100,
-                etaMinutes: undefined,
-                etaReason: undefined,
-                validatedVia: null,
-                validatedAt: undefined,
-              }
-            : s
-        )
-      );
-      setEtaModalOpen(true);
-      pushNotification(
-        'eta_prompt',
-        'Control de Entrada Escolar',
-        'Aún no registramos tu llegada al plantel. ¿En cuánto tiempo estimas llegar?',
-        'student',
-        { studentId: currentStudent.id, actionRequired: true }
-      );
-    } else if (stepNumber === 2) {
-      setSimulatedTime('07:06 AM');
-      handleStudentSubmitEta(15, 'Tráfico pesado en ruta');
-      setEtaModalOpen(false);
-    } else if (stepNumber === 3) {
-      setSimulatedTime('07:18 AM');
-      handleCrossGate();
-    } else if (stepNumber === 4) {
-      setSimulatedTime('07:20 AM');
-      handleConfirmAttendance('ble_auto', studentActiveClass.beaconUuid);
-    } else if (stepNumber === 5) {
-      setSimulatedTime('08:35 AM');
-      setStudents((prev) =>
-        prev.map((s) =>
-          s.id === currentStudent.id
-            ? {
-                ...s,
-                currentStatus: 'on_campus_not_in_class',
-                currentZone: 'Pasillos Edificio Ciencias',
-                validatedVia: null,
-                validatedAt: undefined,
-              }
-            : s
-        )
-      );
-      pushNotification(
-        'class_unattended',
-        'Inicio de Materia: Física Elemental',
-        'Inicia la clase en Laboratorio 2. Estás dentro de la escuela, pero debes validar presencia en este nuevo salón.',
-        'student',
-        { studentId: currentStudent.id, actionRequired: true }
-      );
-    }
-  };
-
-  const handleResetSimulation = () => {
-    setStudents([]);
-    setGroups([]);
-    setOrientadores([]);
-    setTeachers([]);
-    setAuditLogs([]);
-    setDisputes([]);
-    setSimulatedTime('07:05 AM');
-    setSimulationStep(1);
-    setNotifications([]);
-    setEtaModalOpen(false);
-    setCheckinModalOpen(false);
-    setDisputeModalOpen(false);
   };
 
   // 17. SaaS Multi-School Handlers (Dueño de la App)
