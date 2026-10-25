@@ -47,12 +47,7 @@ export function subscribeToGroups(
  * Sync single student update to Firestore
  */
 export async function syncStudentToCloud(student: Student) {
-  const path = `students/${student.id}`;
-  try {
-    await setDoc(doc(db, 'students', student.id), student, { merge: true });
-  } catch (error) {
-    console.warn(`Cloud sync for student ${student.id} deferred:`, error);
-  }
+  await setDoc(doc(db, 'students', student.id), student, { merge: true });
 }
 
 /**
@@ -133,12 +128,7 @@ export function subscribeToStudents(
  * Sync school institution configuration to Firestore
  */
 export async function syncSchoolToCloud(school: SchoolInstitution) {
-  const path = `schools/${school.id}`;
-  try {
-    await setDoc(doc(db, 'schools', school.id), school, { merge: true });
-  } catch (error) {
-    console.warn(`Cloud sync for school ${school.id} deferred:`, error);
-  }
+  await setDoc(doc(db, 'schools', school.id), school, { merge: true });
 }
 
 /**
