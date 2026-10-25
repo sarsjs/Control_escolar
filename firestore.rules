@@ -1,7 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
     function signedIn() {
       return request.auth != null;
     }
@@ -17,14 +16,38 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function isSuperAdmin() {
-      return hasProfile()
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin';
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    // A user can read only their own profile. Superadmin can manage profiles.
-    // The first owner profile is created manually in Firebase Console; this avoids
-    // letting an unauthorised client self-assign an elevated role.
+    function isSuperAdmin() {
+      return hasProfile() && profile().role == 'superadmin';
+    }
+
+    function hasSchoolStaffRole() {
+      return hasProfile()
+        && profile().role in ['director', 'orientador', 'teacher'];
+    }
+
+    function canAccessSchool(schoolId) {
+      return hasSchoolStaffRole()
+        && profile().schoolId == schoolId;
+    }
+
+    function canManageGroups(schoolId) {
+      return isSuperAdmin()
+        || (canAccessSchool(schoolId)
+          && profile().role in ['director', 'orientador']);
+    }
+
+    function canManageStudents(schoolId) {
+      return isSuperAdmin()
+        || (canAccessSchool(schoolId)
+          && profile().role in ['director', 'orientador']);
+    }
+
+    // Users may read their own profile. Only the superadmin may provision or
+    // change other profiles; the initial owner bootstrap is narrowly constrained.
     match /users/{userId} {
       allow read: if signedIn() && (request.auth.uid == userId || isSuperAdmin());
       allow create, update: if isSuperAdmin()
@@ -35,25 +58,48 @@ service cloud.firestore {
       allow delete: if isSuperAdmin() && userId != request.auth.uid;
     }
 
-    // Temporary initial rollout policy: only the verified superadmin may access
-    // school data until role- and school-scoped permissions are implemented.
+    // School users can read only their own school record.
     match /schools/{schoolId} {
-      allow read, create, update, delete: if isSuperAdmin();
+      allow read: if isSuperAdmin() || (hasProfile() && profile().schoolId == schoolId);
+      allow create, update, delete: if isSuperAdmin();
     }
 
+    // Every student/group record must carry schoolId to be accessible by school staff.
     match /students/{studentId} {
-      allow read, create, update, delete: if isSuperAdmin();
+      allow read: if isSuperAdmin()
+        || (resource.data.schoolId is string && canAccessSchool(resource.data.schoolId));
+      allow create: if isSuperAdmin()
+        || (request.resource.data.schoolId is string
+          && canManageStudents(request.resource.data.schoolId));
+      allow update: if isSuperAdmin()
+        || (resource.data.schoolId is string
+          && request.resource.data.schoolId == resource.data.schoolId
+          && canManageStudents(resource.data.schoolId));
+      allow delete: if isSuperAdmin()
+        || (resource.data.schoolId is string
+          && canAccessSchool(resource.data.schoolId)
+          && profile().role == 'director');
     }
 
     match /groups/{groupId} {
-      allow read, create, update, delete: if isSuperAdmin();
+      allow read: if isSuperAdmin()
+        || (resource.data.schoolId is string && canAccessSchool(resource.data.schoolId));
+      allow create: if request.resource.data.schoolId is string
+        && canManageGroups(request.resource.data.schoolId);
+      allow update: if isSuperAdmin()
+        || (resource.data.schoolId is string
+          && request.resource.data.schoolId == resource.data.schoolId
+          && canManageGroups(resource.data.schoolId));
+      allow delete: if isSuperAdmin()
+        || (resource.data.schoolId is string
+          && canAccessSchool(resource.data.schoolId)
+          && profile().role == 'director');
     }
 
     match /disputes/{disputeId} {
       allow read, create, update, delete: if isSuperAdmin();
     }
 
-    // Audit records may be created/read by superadmin only and are immutable.
     match /audit_logs/{auditId} {
       allow read, create: if isSuperAdmin();
       allow update, delete: if false;
@@ -63,13 +109,11 @@ service cloud.firestore {
       allow read, create, update, delete: if isSuperAdmin();
     }
 
-    // Connectivity probe: authenticated sessions only; no public reads/writes.
     match /test/{testId} {
       allow read: if signedIn();
       allow write: if false;
     }
 
-    // Default deny for every collection not explicitly listed above.
     match /{document=**} {
       allow read, write: if false;
     }
