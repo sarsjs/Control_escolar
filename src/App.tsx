@@ -553,6 +553,7 @@ export default function App() {
       semester,
       turn: 'Matutino',
       orientadorId,
+      ...(currentUser?.schoolId ? { schoolId: currentUser.schoolId } : {}),
       studentIds: [],
       schedule: [],
     };
@@ -575,6 +576,7 @@ export default function App() {
       semester,
       turn,
       orientadorId: currentOrientadorEntity.id,
+      ...(currentUser?.schoolId ? { schoolId: currentUser.schoolId } : {}),
       studentIds: [],
       schedule: [],
     };
