@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  where,
   setDoc,
   getDocs,
   onSnapshot,
@@ -14,30 +15,6 @@ import { Student, SchoolGroup, AuditLogEntry, AttendanceDispute, SystemNotificat
 export { testFirestoreConnection };
 
 /**
- * Seed initial students into Firestore if collection is empty
- */
-export async function seedInitialDataIfEmpty(
-  initialStudents: Student[],
-  initialGroups: SchoolGroup[]
-) {
-  try {
-    const studentsSnap = await getDocs(collection(db, 'students'));
-    if (studentsSnap.empty) {
-      console.log('Seeding initial students to Firestore...');
-      for (const st of initialStudents) {
-        await setDoc(doc(db, 'students', st.id), st);
-      }
-      for (const grp of initialGroups) {
-        await setDoc(doc(db, 'groups', grp.id), grp);
-      }
-      console.log('Firestore initialized with master academic data.');
-    }
-  } catch (error) {
-    console.warn('Initial data seeding note:', error);
-  }
-}
-
-/**
  * Save a real school group to Firestore.
  */
 export async function syncGroupToCloud(group: SchoolGroup) {
@@ -47,9 +24,20 @@ export async function syncGroupToCloud(group: SchoolGroup) {
 /**
  * Subscribe to real-time school group updates.
  */
-export function subscribeToGroups(onUpdate: (groups: SchoolGroup[]) => void) {
+export function subscribeToGroups(
+  schoolId: string | undefined,
+  isSuperAdmin: boolean,
+  onUpdate: (groups: SchoolGroup[]) => void
+) {
+  // Non-superadmins must never fall back to an unscoped collection query.
+  if (!isSuperAdmin && !schoolId) {
+    onUpdate([]);
+    return () => {};
+  }
+  const groupsRef = collection(db, 'groups');
+  const scopedQuery = isSuperAdmin ? groupsRef : query(groupsRef, where('schoolId', '==', schoolId));
   return onSnapshot(
-    collection(db, 'groups'),
+    scopedQuery,
     (snapshot) => onUpdate(snapshot.docs.map((item) => item.data() as SchoolGroup)),
     (error) => console.warn('Firestore realtime group subscription error:', error)
   );
@@ -106,11 +94,22 @@ export async function pushNotificationToCloud(notification: SystemNotification) 
 /**
  * Subscribe to real-time student updates across all devices
  */
-export function subscribeToStudents(onUpdate: (students: Student[]) => void) {
+export function subscribeToStudents(
+  schoolId: string | undefined,
+  isSuperAdmin: boolean,
+  onUpdate: (students: Student[]) => void
+) {
   const path = 'students';
+  // Non-superadmins must never fall back to an unscoped collection query.
+  if (!isSuperAdmin && !schoolId) {
+    onUpdate([]);
+    return () => {};
+  }
   try {
+    const studentsRef = collection(db, path);
+    const scopedQuery = isSuperAdmin ? studentsRef : query(studentsRef, where('schoolId', '==', schoolId));
     const unsubscribe = onSnapshot(
-      collection(db, path),
+      scopedQuery,
       (snapshot) => {
         const list: Student[] = [];
         snapshot.forEach((d) => {
@@ -145,8 +144,24 @@ export async function syncSchoolToCloud(school: SchoolInstitution) {
 /**
  * Subscribe to real-time schools list
  */
-export function subscribeToSchools(onUpdate: (schools: SchoolInstitution[]) => void) {
+export function subscribeToSchools(
+  schoolId: string | undefined,
+  isSuperAdmin: boolean,
+  onUpdate: (schools: SchoolInstitution[]) => void
+) {
   const path = 'schools';
+  // A school user listens only to their own school document.
+  if (!isSuperAdmin) {
+    if (!schoolId) {
+      onUpdate([]);
+      return () => {};
+    }
+    return onSnapshot(
+      doc(db, path, schoolId),
+      (snapshot) => onUpdate(snapshot.exists() ? [snapshot.data() as SchoolInstitution] : []),
+      (error) => console.warn('Firestore realtime school subscription error:', error)
+    );
+  }
   try {
     const unsubscribe = onSnapshot(
       collection(db, path),
