@@ -117,19 +117,14 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
                 Código PIN de Aula
               </span>
               <span className="text-3xl font-black font-mono tracking-widest text-emerald-400">
-                {activeClass?.currentPin || '7392'}
+                {activeClass?.currentPin || 'Pendiente'}
               </span>
             </div>
 
             <div className="flex flex-col gap-1 border-l border-slate-700 pl-3">
-              <button
-                type="button"
-                onClick={onRegeneratePin}
-                title="Generar nuevo PIN aleatorio"
-                className="p-1.5 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg transition-colors"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
+              <span className="px-1.5 py-1 text-[10px] text-slate-300" title="La validación se habilitará después de conectar un flujo seguro">
+                Validación pendiente
+              </span>
               <button
                 type="button"
                 onClick={() => setProjectorMode(!projectorMode)}
@@ -164,7 +159,7 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-400 max-w-lg mx-auto">
-            O acércate con el Bluetooth activado para sincronización automática con la baliza de este salón.
+            La validación por PIN y Bluetooth aún no está habilitada; no se registrarán asistencias simuladas.
           </p>
         </div>
       )}
@@ -188,7 +183,7 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
             <span className="text-2xl font-extrabold font-mono text-slate-900">{inClassStudents.length}</span>
             <span className="text-xs text-slate-500">de {groupStudents.length} alumnos</span>
           </div>
-          <span className="text-[11px] text-slate-500 mt-1 block">Validaron PIN / Bluetooth</span>
+          <span className="text-[11px] text-slate-500 mt-1 block">Registros confirmados</span>
         </div>
 
         {/* KPI 2: En Campus Fuera de Aula */}
