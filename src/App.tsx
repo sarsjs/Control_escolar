@@ -758,7 +758,6 @@ export default function App() {
         isOpen={checkinModalOpen}
         onClose={() => setCheckinModalOpen(false)}
         activeClass={studentActiveClass}
-        onConfirmAttendance={handleConfirmAttendance}
       />
       )}
 
