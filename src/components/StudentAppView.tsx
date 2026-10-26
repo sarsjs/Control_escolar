@@ -22,7 +22,6 @@ interface StudentAppViewProps {
   onOpenEtaModal: () => void;
   onOpenCheckinModal: () => void;
   onOpenDisputeModal: () => void;
-  onSimulateCrossGate: () => void;
 }
 
 export const StudentAppView: React.FC<StudentAppViewProps> = ({
@@ -34,7 +33,6 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
   onOpenEtaModal,
   onOpenCheckinModal,
   onOpenDisputeModal,
-  onSimulateCrossGate,
 }) => {
   const [showIdCard, setShowIdCard] = useState<boolean>(false);
 
@@ -175,12 +173,12 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
           <div className="flex items-center justify-between border-b border-white/10 pb-4">
             <div>
               <span className="text-[10px] font-mono tracking-widest uppercase text-indigo-300">
-                Colegio Preparatorio Central
+                Plantel sin configurar
               </span>
               <h3 className="text-sm font-bold tracking-tight">Credencial Digital del Alumno</h3>
             </div>
             <div className="px-2.5 py-1 rounded-md bg-white/10 text-[11px] font-mono text-indigo-200">
-              Ciclo 2026-2027
+              Ciclo escolar por configurar
             </div>
           </div>
 
@@ -241,7 +239,7 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
                 Aún no registramos tu llegada al plantel
               </h3>
               <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                Hora de entrada oficial: <strong className="text-slate-800">07:00 AM</strong>. Tu clase en curso para {studentGroup.name} es <strong className="text-slate-800">{activeClass?.subjectName}</strong> con <strong className="text-slate-800">{activeClass?.teacherName}</strong> en <strong className="text-slate-800">{activeClass?.classroom}</strong>.
+                Horario de entrada institucional: <strong className="text-slate-800">por configurar</strong>. Tu clase en curso para {studentGroup.name} es <strong className="text-slate-800">{activeClass?.subjectName}</strong> con <strong className="text-slate-800">{activeClass?.teacherName}</strong> en <strong className="text-slate-800">{activeClass?.classroom}</strong>.
               </p>
             </div>
           </div>
@@ -250,7 +248,7 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
             <div className="text-xs text-slate-700">
               <strong className="block text-slate-900 font-semibold">¿En cuánto tiempo estimas llegar?</strong>
               <span className="text-slate-500 text-[11px]">
-                Tu reporte se enviará de inmediato a tu Orientador y al Profesor de tu materia activa.
+                El reporte de llegada estará disponible cuando se conecte el servicio seguro de avisos.
               </span>
             </div>
 
@@ -305,13 +303,9 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
               >
                 Actualizar Minutos
               </button>
-              <button
-                type="button"
-                onClick={onSimulateCrossGate}
-                className="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-all shadow-xs"
-              >
-                Registrar Llegada al Perímetro Escolar
-              </button>
+              <span className="max-w-xs text-[11px] text-slate-600">
+                La llegada al plantel se mostrará cuando exista una verificación real de ubicación; no se puede registrar manualmente desde esta pantalla.
+              </span>
             </div>
           </div>
         </div>
