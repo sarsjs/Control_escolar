@@ -86,24 +86,12 @@ service cloud.firestore {
       allow create: if isSuperAdmin()
         || (request.resource.data.schoolId is string
           && canManageStudents(request.resource.data.schoolId));
+      // Students can read their own enrollment but cannot update attendance,
+      // location, ETA, or validation fields directly from the client.
       allow update: if isSuperAdmin()
         || (resource.data.schoolId is string
           && request.resource.data.schoolId == resource.data.schoolId
-          && canManageStudents(resource.data.schoolId))
-        || (isOwnStudent(studentId)
-          && request.resource.data.schoolId == resource.data.schoolId
-          && request.resource.data.groupId == resource.data.groupId
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'currentStatus',
-            'currentZone',
-            'distanceToCampusMeters',
-            'lastUpdated',
-            'etaMinutes',
-            'etaReason',
-            'etaSentAt',
-            'validatedVia',
-            'validatedAt'
-          ]));
+          && canManageStudents(resource.data.schoolId));
       allow delete: if isSuperAdmin()
         || (resource.data.schoolId is string
           && canAccessSchool(resource.data.schoolId)
