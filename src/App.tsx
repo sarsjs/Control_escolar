@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import {
@@ -718,18 +718,54 @@ export default function App() {
   // 17. SaaS Multi-School Handlers (Dueño de la App)
   const handleAddSchool = async (newSchool: SchoolInstitution) => {
     try {
-      // Do not show a school as registered until Firestore confirms persistence.
+      // Persist the school first. Director provisioning is a separate, authenticated
+      // server operation because the browser must never create privileged accounts.
       await syncSchoolToCloud(newSchool);
       setCurrentSchool(newSchool);
       setSchools((prev) => [newSchool, ...prev.filter((school) => school.id !== newSchool.id)]);
+    } catch (error) {
+      console.error('No se pudo guardar el plantel en Firestore:', error);
+      window.alert('No se pudo registrar el plantel. Revisa la conexión y vuelve a intentarlo.');
+      return;
+    }
+
+    try {
+      const signedInUser = auth.currentUser;
+      if (!signedInUser) throw new Error('La sesión del superadministrador ya no está activa.');
+      const idToken = await signedInUser.getIdToken();
+      const response = await fetch('/api/admin/provision-director', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ schoolId: newSchool.id }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof payload.error === 'string' ? payload.error : 'No se pudo crear la cuenta del director.');
+      }
+
+      // Firebase sends the secure password-setup email only after the Auth account exists.
+      await sendPasswordResetEmail(auth, newSchool.directorEmail.trim());
       pushNotification(
         'info',
-        'Nuevo Plantel Escolar Afiliado',
-        `Se registró el plantel ${newSchool.name} (CCT: ${newSchool.cct}). El acceso del director deberá aprovisionarse por Firebase Authentication.`,
+        'Plantel y director registrados',
+        `Se creó la cuenta de ${newSchool.directorName} para ${newSchool.name}. Se envió el correo para establecer su contraseña a ${newSchool.directorEmail}.`,
         'superadmin'
       );
     } catch (error) {
-      console.error('No se pudo guardar el plantel en Firestore:', error);
+      const reason = error instanceof Error ? error.message : String(error);
+      console.error('No se completó la invitación del director:', error);
+      pushNotification(
+        'info',
+        'Plantel registrado; invitación pendiente',
+        `El plantel ${newSchool.name} sí quedó guardado, pero no se pudo completar el alta o el envío del correo del director. Detalle: ${reason}`,
+        'superadmin'
+      );
+      window.alert(
+        `El plantel "${newSchool.name}" quedó registrado, pero la invitación del director está pendiente. ${reason}\n\nNo registres otra escuela para intentarlo de nuevo; revisa el error y vuelve a enviar la invitación cuando esté disponible.`
+      );
     }
   };
 
