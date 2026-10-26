@@ -689,12 +689,12 @@ export default function App() {
     }
     if (!csvData.length) return;
 
-    const newStudents: Student[] = csvData.map((row, idx) => ({
+    const newStudents: Student[] = csvData.map((row, idx): Student => ({
       id: `stu-csv-${Date.now()}-${idx}`,
       name: row.name.trim(),
       matricula: row.matricula.trim(),
       groupId,
-      schoolId: targetGroup.schoolId,
+      schoolId: targetGroup.schoolId as string,
       avatar: '',
       currentStatus: 'outside_school',
       currentZone: 'Sin ubicación registrada',
