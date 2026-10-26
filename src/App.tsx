@@ -43,6 +43,7 @@ import {
   subscribeToSchools,
   syncGroupToCloud,
   subscribeToGroups,
+  subscribeToDisputes,
 } from './utils/firebaseSync';
 
 export default function App() {
@@ -194,6 +195,13 @@ export default function App() {
     let unsubscribeStudents: (() => void) | undefined;
     let unsubscribeGroups: (() => void) | undefined;
     let unsubscribeStudentGroup: (() => void) | undefined;
+    const unsubscribeDisputes = subscribeToDisputes(
+      currentUser.schoolId,
+      isSuperAdmin,
+      currentUser.linkedEntityId,
+      currentUser.role === 'student',
+      (cloudDisputes) => setDisputes(cloudDisputes)
+    );
 
     if (currentUser.role === 'student') {
       // Students must not query the whole school roster. Read only their own
@@ -232,6 +240,7 @@ export default function App() {
       unsubscribeGroups?.();
       unsubscribeStudentGroup?.();
       unsubscribeSchools();
+      unsubscribeDisputes();
     };
   }, [currentUser?.id]);
 
@@ -406,8 +415,12 @@ export default function App() {
     if (!currentStudent || !studentGroup || !currentUser) {
       throw new Error('No se encontró una inscripción escolar activa para enviar la solicitud.');
     }
+    if (!currentStudent.schoolId) {
+      throw new Error('La inscripción del alumno no tiene una escuela asignada. Contacta a orientación.');
+    }
     const newDispute: AttendanceDispute = {
       id: `disp-${Date.now()}`,
+      schoolId: currentStudent.schoolId,
       attendanceId: `att-${currentStudent.id}-${Date.now()}`,
       studentId: currentStudent.id,
       studentName: currentStudent.name,
@@ -420,20 +433,8 @@ export default function App() {
 
     // Only reflect success after Firestore confirms the write.
     await recordDisputeToCloud(newDispute);
-    setDisputes((prev) => [newDispute, ...prev]);
-
-    await pushNotificationToCloud({
-      id: `notif-${Date.now()}-dispute`,
-      type: 'dispute_requested',
-      title: `Solicitud de Revisión: ${currentStudent.name}`,
-      message: `El alumno ${currentStudent.name} (${studentGroup.name}) solicitó revisión de su asistencia en ${studentActiveClass?.subjectName || 'la clase asignada'}.`,
-      timestamp: new Date().toISOString(),
-      targetRole: 'orientador',
-      orientadorId: studentOrientador?.id,
-      groupId: studentGroup.id,
-      studentId: currentStudent.id,
-      read: false,
-    });
+    // Authorized staff receive the saved dispute through the school-scoped realtime subscription.
+    // Notification writes remain disabled until recipient-scoped notification rules are implemented.
   };
 
   // 7. Resolve dispute by Orientador or Director
