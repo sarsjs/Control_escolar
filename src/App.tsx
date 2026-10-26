@@ -714,30 +714,40 @@ export default function App() {
   };
 
   // 17. SaaS Multi-School Handlers (Dueño de la App)
-  const handleAddSchool = (newSchool: SchoolInstitution) => {
-    setCurrentSchool(newSchool);
-    setSchools((prev) => [newSchool, ...prev]);
-    void syncSchoolToCloud(newSchool).catch((error) => console.error('No se pudo guardar el plantel en Firestore:', error));
-    pushNotification(
-      'info',
-      'Nuevo Plantel Escolar Afiliado',
-      `Se registró el plantel ${newSchool.name} (CCT: ${newSchool.cct}). El acceso del director deberá aprovisionarse por Firebase Authentication.`,
-      'superadmin'
-    );
+  const handleAddSchool = async (newSchool: SchoolInstitution) => {
+    try {
+      // Do not show a school as registered until Firestore confirms persistence.
+      await syncSchoolToCloud(newSchool);
+      setCurrentSchool(newSchool);
+      setSchools((prev) => [newSchool, ...prev.filter((school) => school.id !== newSchool.id)]);
+      pushNotification(
+        'info',
+        'Nuevo Plantel Escolar Afiliado',
+        `Se registró el plantel ${newSchool.name} (CCT: ${newSchool.cct}). El acceso del director deberá aprovisionarse por Firebase Authentication.`,
+        'superadmin'
+      );
+    } catch (error) {
+      console.error('No se pudo guardar el plantel en Firestore:', error);
+    }
   };
 
-  const handleUpdateSchool = (updatedSchool: SchoolInstitution) => {
-    setSchools((prev) => prev.map((s) => (s.id === updatedSchool.id ? updatedSchool : s)));
-    if (currentSchool?.id === updatedSchool.id) {
-      setCurrentSchool(updatedSchool);
+  const handleUpdateSchool = async (updatedSchool: SchoolInstitution) => {
+    try {
+      // Keep the UI aligned with persisted data if a write is rejected.
+      await syncSchoolToCloud(updatedSchool);
+      setSchools((prev) => prev.map((school) => (school.id === updatedSchool.id ? updatedSchool : school)));
+      if (currentSchool?.id === updatedSchool.id) {
+        setCurrentSchool(updatedSchool);
+      }
+      pushNotification(
+        'info',
+        'Parámetros Escolares Actualizados',
+        `Se actualizaron los parámetros técnicos y geocerca de ${updatedSchool.name}.`,
+        'superadmin'
+      );
+    } catch (error) {
+      console.error('No se pudieron guardar los parámetros del plantel en Firestore:', error);
     }
-    syncSchoolToCloud(updatedSchool);
-    pushNotification(
-      'info',
-      'Parámetros Escolares Actualizados',
-      `Se actualizaron los parámetros técnicos y geocerca de ${updatedSchool.name}.`,
-      'superadmin'
-    );
   };
 
   if (!currentUser) {
