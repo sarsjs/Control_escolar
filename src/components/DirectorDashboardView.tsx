@@ -175,6 +175,12 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
         </div>
       )}
 
+      {groupCreateError && (
+        <div role="alert" className="p-4 bg-rose-50 border border-rose-300 rounded-2xl text-xs text-rose-800 font-medium">
+          {groupCreateError}
+        </div>
+      )}
+
       {/* KPI Stats of School */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
