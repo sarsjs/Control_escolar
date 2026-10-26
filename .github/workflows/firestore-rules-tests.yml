@@ -1,0 +1,28 @@
+name: Firestore Rules Tests
+
+on:
+  push:
+    branches:
+      - "test/**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firestore-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install test tools
+        run: npm install --no-save --package-lock=false --legacy-peer-deps firebase@13 @firebase/rules-unit-testing@4 firebase-tools@14
+      - name: Run Firestore rules tests in emulator
+        run: npx firebase emulators:exec --only firestore --project demo-aulacontrol-rules-test "node --test tests/firestore.rules.test.mjs"
