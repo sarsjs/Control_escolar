@@ -1,8 +1,5 @@
 import fs from "node:fs";
 import {
-  after,
-  before,
-  beforeEach,
   initializeTestEnvironment,
   assertSucceeds,
   assertFails,
@@ -15,7 +12,7 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
-import test from "node:test";
+import test, { after, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
 const PROJECT_ID = "demo-aulacontrol-rules-test";
