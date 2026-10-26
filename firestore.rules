@@ -175,6 +175,43 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+
+    // ETA reports are separate from enrollment/attendance. Students may create
+    // a bounded report only for their own linked enrollment; reports are immutable.
+    match /eta_reports/{reportId} {
+      allow read: if isSuperAdmin()
+        || (resource.data.schoolId is string && canAccessSchool(resource.data.schoolId))
+        || (hasProfile()
+          && profile().role == 'student'
+          && profile().linkedEntityId == resource.data.studentId);
+
+      allow create: if hasProfile()
+        && profile().role == 'student'
+        && profile().linkedEntityId is string
+        && request.resource.data.keys().hasOnly([
+          'schoolId', 'studentId', 'studentName', 'groupId', 'groupName',
+          'etaMinutes', 'reason', 'createdAt', 'status'
+        ])
+        && request.resource.data.studentId == profile().linkedEntityId
+        && exists(/databases/$(database)/documents/students/$(profile().linkedEntityId))
+        && request.resource.data.schoolId == get(/databases/$(database)/documents/students/$(profile().linkedEntityId)).data.schoolId
+        && request.resource.data.groupId == get(/databases/$(database)/documents/students/$(profile().linkedEntityId)).data.groupId
+        && request.resource.data.studentName == get(/databases/$(database)/documents/students/$(profile().linkedEntityId)).data.name
+        && exists(/databases/$(database)/documents/groups/$(request.resource.data.groupId))
+        && get(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.schoolId == request.resource.data.schoolId
+        && get(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.name == request.resource.data.groupName
+        && request.resource.data.etaMinutes is int
+        && request.resource.data.etaMinutes >= 1
+        && request.resource.data.etaMinutes <= 120
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.reason.size() <= 200
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.status == 'pending';
+
+      allow update, delete: if false;
+    }
+
     match /notifications/{notificationId} {
       allow read, create, update, delete: if isSuperAdmin();
     }
