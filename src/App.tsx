@@ -309,11 +309,17 @@ export default function App() {
     ? etaReports.filter((report) => report.studentId === currentUser.linkedEntityId)
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
     : undefined;
+  // ETA is a report from the student, not proof of physical arrival or attendance.
+  // Expose its details without changing the authoritative enrollment/presence status.
   const currentStudent = baseCurrentStudent && latestOwnEtaReport
-    ? { ...baseCurrentStudent, currentStatus: 'en_route_delayed' as StudentPresenceStatus,
-        currentZone: 'En camino hacia el plantel', etaMinutes: latestOwnEtaReport.etaMinutes,
+    ? {
+        ...baseCurrentStudent,
+        etaMinutes: latestOwnEtaReport.etaMinutes,
         etaReason: latestOwnEtaReport.reason,
-        etaSentAt: latestOwnEtaReport.createdAt ? new Date(latestOwnEtaReport.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'Aviso enviado' }
+        etaSentAt: latestOwnEtaReport.createdAt
+          ? new Date(latestOwnEtaReport.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+          : 'Aviso enviado',
+      }
     : baseCurrentStudent;
   const studentGroup = currentStudent
     ? groups.find((g) => g.id === currentStudent.groupId)
