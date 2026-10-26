@@ -22,6 +22,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Set up Java for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
       - name: Install test tools
         run: npm install --no-save --package-lock=false --legacy-peer-deps firebase@13 @firebase/rules-unit-testing@4 firebase-tools@14
       - name: Run Firestore rules tests in emulator
