@@ -292,8 +292,10 @@ export default function App() {
   const currentOrientadorEntity = orientadores.find((o) => o.id === currentUser?.linkedEntityId);
 
   // 1. Student ETA submission (routes to Orientador + Teacher)
-  const handleStudentSubmitEta = (minutes: number, reason: string) => {
-    if (!currentStudent || !studentGroup) return;
+  const handleStudentSubmitEta = async (minutes: number, reason: string) => {
+    if (!currentStudent || !studentGroup) {
+      throw new Error('No se encontró una inscripción escolar activa para enviar el aviso.');
+    }
     const updatedStudent: Student = {
       ...currentStudent,
       currentStatus: 'en_route_delayed',
@@ -304,10 +306,13 @@ export default function App() {
       lastUpdated: simulatedTime,
     };
 
+    // Do not claim the ETA was sent unless the database accepts it.
+    // Current Firestore rules intentionally block direct student writes; a
+    // trusted server-side reporting endpoint is required before this is enabled.
+    await syncStudentToCloud(updatedStudent);
     setStudents((prev) =>
       prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
     );
-    syncStudentToCloud(updatedStudent);
 
     if (studentOrientador) {
       pushNotification(
