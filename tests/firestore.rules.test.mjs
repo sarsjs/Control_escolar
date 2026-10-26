@@ -196,3 +196,50 @@ test("ordinary school staff cannot create unrestricted notifications", async () 
     message: "Test", schoolId: "school-a",
   }));
 });
+
+
+test("student can create an ETA report only for their own enrollment and group", async () => {
+  const db = asUser("student-user");
+  await assertSucceeds(setDoc(doc(db, "eta_reports", "eta-valid"), {
+    schoolId: "school-a", studentId: "student-a", studentName: "Test Student",
+    groupId: "group-a", groupName: "1A", etaMinutes: 15,
+    reason: "Delayed bus", createdAt: new Date(), status: "pending",
+  }));
+  await assertFails(setDoc(doc(db, "eta_reports", "eta-spoofed"), {
+    schoolId: "school-b", studentId: "student-b", studentName: "Other Student",
+    groupId: "group-b", groupName: "1B", etaMinutes: 15,
+    reason: "Spoofed", createdAt: new Date(), status: "pending",
+  }));
+  await assertFails(setDoc(doc(db, "eta_reports", "eta-invalid-minutes"), {
+    schoolId: "school-a", studentId: "student-a", studentName: "Test Student",
+    groupId: "group-a", groupName: "1A", etaMinutes: 999,
+    reason: "Invalid ETA", createdAt: new Date(), status: "pending",
+  }));
+});
+
+test("ETA reports are readable only by their student or authorized staff in the same school", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "eta_reports", "eta-a"), {
+      schoolId: "school-a", studentId: "student-a", studentName: "Test Student",
+      groupId: "group-a", groupName: "1A", etaMinutes: 15,
+      reason: "Bus", createdAt: new Date(), status: "pending",
+    });
+  });
+  await assertSucceeds(getDoc(doc(asUser("student-user"), "eta_reports", "eta-a")));
+  await assertSucceeds(getDoc(doc(asUser("teacher-a"), "eta_reports", "eta-a")));
+  await assertFails(getDoc(doc(asUser("director-b"), "eta_reports", "eta-a")));
+});
+
+test("ETA reports cannot be edited or deleted by the student", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "eta_reports", "eta-a"), {
+      schoolId: "school-a", studentId: "student-a", studentName: "Test Student",
+      groupId: "group-a", groupName: "1A", etaMinutes: 15,
+      reason: "Bus", createdAt: new Date(), status: "pending",
+    });
+  });
+  const db = asUser("student-user");
+  await assertFails(updateDoc(doc(db, "eta_reports", "eta-a"), { etaMinutes: 1 }));
+  await assertFails(deleteDoc(doc(db, "eta_reports", "eta-a")));
+});
+
