@@ -79,6 +79,18 @@ beforeEach(async () => {
 
 const asUser = (uid) => testEnv.authenticatedContext(uid).firestore();
 
+test("unauthenticated users cannot read protected records", async () => {
+  const db = testEnv.unauthenticatedContext().firestore();
+  await assertFails(getDoc(doc(db, "students", "student-a")));
+  await assertFails(getDoc(doc(db, "groups", "group-a")));
+});
+
+test("users cannot promote their own profile or change their school role", async () => {
+  const db = asUser("student-user");
+  await assertFails(updateDoc(doc(db, "users", "student-user"), { role: "superadmin" }));
+  await assertFails(updateDoc(doc(db, "users", "student-user"), { schoolId: "school-b" }));
+});
+
 test("student can read their own enrollment but not another student's enrollment", async () => {
   const db = asUser("student-user");
   await assertSucceeds(getDoc(doc(db, "students", "student-a")));
@@ -110,6 +122,12 @@ test("director can create a group only for their own school", async () => {
   await assertFails(setDoc(doc(db, "groups", "new-group-b"), {
     schoolId: "school-b", name: "2A",
   }));
+});
+
+test("director cannot move an existing group into another school", async () => {
+  const db = asUser("director-a");
+  await assertFails(updateDoc(doc(db, "groups", "group-a"), { schoolId: "school-b" }));
+  await assertFails(updateDoc(doc(db, "groups", "group-b"), { name: "Renamed by school A" }));
 });
 
 test("student can submit an attendance dispute only for their linked enrollment", async () => {
@@ -155,6 +173,14 @@ test("students and teachers cannot read or create notifications directly", async
   }));
   await assertFails(setDoc(doc(teacherDb, "notifications", "teacher-notification"), {
     schoolId: "school-a", targetUserId: "student-user", message: "Spoofed",
+  }));
+});
+
+test("director cannot create an audit record attributed to another user", async () => {
+  const db = asUser("director-a");
+  await assertFails(setDoc(doc(db, "audit_logs", "spoofed-audit"), {
+    schoolId: "school-a", studentId: "student-a", groupId: "group-a",
+    reason: "Spoofed identity", modifiedById: "director-b", modifiedByRole: "director",
   }));
 });
 
