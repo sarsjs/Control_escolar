@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   Clock,
   CheckCircle2,
-  RefreshCw,
   BellRing,
   Maximize2,
   Minimize2,
@@ -21,7 +20,6 @@ interface TeacherDashboardViewProps {
   allTeacherGroups: SchoolGroup[];
   students: Student[];
   onSelectGroup: (group: SchoolGroup) => void;
-  onRegeneratePin: () => void;
   onSendStudentAlert: (studentId: string, studentName: string) => void;
   onManualValidateStudent: (studentId: string) => void;
 }
@@ -32,7 +30,6 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
   allTeacherGroups,
   students,
   onSelectGroup,
-  onRegeneratePin,
   onSendStudentAlert,
   onManualValidateStudent,
 }) => {
