@@ -402,33 +402,38 @@ export default function App() {
   };
 
   // 6. Student submits dispute / review request
-  const handleStudentSubmitDispute = (reason: string) => {
-    if (!currentStudent || !studentGroup) return;
+  const handleStudentSubmitDispute = async (reason: string) => {
+    if (!currentStudent || !studentGroup || !currentUser) {
+      throw new Error('No se encontró una inscripción escolar activa para enviar la solicitud.');
+    }
     const newDispute: AttendanceDispute = {
       id: `disp-${Date.now()}`,
       attendanceId: `att-${currentStudent.id}-${Date.now()}`,
       studentId: currentStudent.id,
       studentName: currentStudent.name,
       groupId: currentStudent.groupId,
-      subjectName: studentActiveClass?.subjectName || 'Matemáticas II',
+      subjectName: studentActiveClass?.subjectName || 'Sin materia asignada',
       date: new Date().toISOString().slice(0, 10),
       studentReason: reason,
       status: 'pending',
     };
 
+    // Only reflect success after Firestore confirms the write.
+    await recordDisputeToCloud(newDispute);
     setDisputes((prev) => [newDispute, ...prev]);
-    recordDisputeToCloud(newDispute);
 
-    pushNotification(
-      'dispute_requested',
-      `Solicitud de Revisión: ${currentStudent.name}`,
-      `El alumno ${currentStudent.name} (${studentGroup.name}) solicitó revisión de su asistencia en ${studentActiveClass?.subjectName}. Motivo: "${reason}".`,
-      'orientador',
-      {
-        orientadorId: studentOrientador?.id,
-        groupId: studentGroup.id,
-      }
-    );
+    await pushNotificationToCloud({
+      id: `notif-${Date.now()}-dispute`,
+      type: 'dispute_requested',
+      title: `Solicitud de Revisión: ${currentStudent.name}`,
+      message: `El alumno ${currentStudent.name} (${studentGroup.name}) solicitó revisión de su asistencia en ${studentActiveClass?.subjectName || 'la clase asignada'}.`,
+      timestamp: new Date().toISOString(),
+      targetRole: 'orientador',
+      orientadorId: studentOrientador?.id,
+      groupId: studentGroup.id,
+      studentId: currentStudent.id,
+      read: false,
+    });
   };
 
   // 7. Resolve dispute by Orientador or Director
