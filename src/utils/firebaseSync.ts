@@ -98,24 +98,14 @@ export async function syncAttendanceCorrectionToCloud(student: Student, entry: A
  * Save dispute to Firestore
  */
 export async function recordDisputeToCloud(dispute: AttendanceDispute) {
-  const path = `disputes/${dispute.id}`;
-  try {
-    await setDoc(doc(db, 'disputes', dispute.id), dispute, { merge: true });
-  } catch (error) {
-    console.warn('Dispute cloud recording deferred:', error);
-  }
+  await setDoc(doc(db, 'disputes', dispute.id), dispute, { merge: true });
 }
 
 /**
  * Broadcast notification to Firestore
  */
 export async function pushNotificationToCloud(notification: SystemNotification) {
-  const path = `notifications/${notification.id}`;
-  try {
-    await setDoc(doc(db, 'notifications', notification.id), notification);
-  } catch (error) {
-    console.warn('Notification cloud broadcast deferred:', error);
-  }
+  await setDoc(doc(db, 'notifications', notification.id), notification);
 }
 
 /**
