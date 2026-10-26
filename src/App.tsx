@@ -644,31 +644,35 @@ export default function App() {
   };
 
   // 12. Orientador enrolls individual student
-  const handleAddStudentToGroup = (groupId: string, name: string, matricula: string) => {
+  const handleAddStudentToGroup = async (groupId: string, name: string, matricula: string) => {
+    const targetGroup = groups.find((group) => group.id === groupId);
+    if (!targetGroup?.schoolId || targetGroup.schoolId !== currentUser?.schoolId) {
+      console.error('No se puede inscribir al alumno: el grupo no pertenece al plantel de la sesión.');
+      return;
+    }
     const newStudentId = `stu-${Date.now()}`;
     const newStudent: Student = {
       id: newStudentId,
       name,
       matricula,
       groupId,
-      ...(groups.find((group) => group.id === groupId)?.schoolId ? { schoolId: groups.find((group) => group.id === groupId)?.schoolId } : currentUser?.schoolId ? { schoolId: currentUser.schoolId } : {}),
+      schoolId: targetGroup.schoolId,
       avatar: '',
       currentStatus: 'outside_school',
       currentZone: 'Sin ubicación registrada',
       distanceToCampusMeters: 0,
       lastUpdated: simulatedTime,
     };
+    const updatedGroup = { ...targetGroup, studentIds: [...targetGroup.studentIds, newStudentId] };
 
-    setStudents((prev) => [...prev, newStudent]);
-    void syncStudentToCloud(newStudent).catch((error) => console.error('No se pudo guardar el alumno en Firestore:', error));
-    setGroups((prev) =>
-      prev.map((g) => {
-        if (g.id !== groupId) return g;
-        const updatedGroup = { ...g, studentIds: [...g.studentIds, newStudentId] };
-        void syncGroupToCloud(updatedGroup).catch((error) => console.error('No se pudo actualizar la lista del grupo en Firestore:', error));
-        return updatedGroup;
-      })
-    );
+    try {
+      await syncStudentToCloud(newStudent);
+      await syncGroupToCloud(updatedGroup);
+      setStudents((prev) => [...prev, newStudent]);
+      setGroups((prev) => prev.map((group) => group.id === groupId ? updatedGroup : group));
+    } catch (error) {
+      console.error('No se pudo completar la inscripción del alumno en Firestore:', error);
+    }
   };
 
   // 13. Orientador imports students via CSV
