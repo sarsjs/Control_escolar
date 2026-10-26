@@ -35,6 +35,7 @@ import {
   syncStudentToCloud,
   syncAttendanceCorrectionToCloud,
   recordDisputeToCloud,
+  resolveDisputeToCloud,
   pushNotificationToCloud,
   subscribeToStudents,
   subscribeToStudentById,
@@ -438,7 +439,7 @@ export default function App() {
   };
 
   // 7. Resolve dispute by Orientador or Director
-  const handleResolveDispute = (disputeId: string, approved: boolean, notes: string) => {
+  const handleResolveDispute = async (disputeId: string, approved: boolean, notes: string) => {
     const dispute = disputes.find((d) => d.id === disputeId);
     if (!dispute) return;
 
