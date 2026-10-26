@@ -196,3 +196,30 @@ export function subscribeToSchools(
   }
 }
 
+
+/** Subscribe to disputes within one school or one student's own records. */
+export function subscribeToDisputes(
+  schoolId: string | undefined,
+  isSuperAdmin: boolean,
+  studentId: string | undefined,
+  isStudent: boolean,
+  onUpdate: (disputes: AttendanceDispute[]) => void
+) {
+  if (isStudent && !studentId) {
+    onUpdate([]);
+    return () => {};
+  }
+  if (!isSuperAdmin && !isStudent && !schoolId) {
+    onUpdate([]);
+    return () => {};
+  }
+  const disputesRef = collection(db, 'disputes');
+  const scopedQuery = isSuperAdmin
+    ? disputesRef
+    : query(disputesRef, where(isStudent ? 'studentId' : 'schoolId', '==', isStudent ? studentId : schoolId));
+  return onSnapshot(
+    scopedQuery,
+    (snapshot) => onUpdate(snapshot.docs.map((item) => item.data() as AttendanceDispute)),
+    (error) => console.warn('Firestore dispute subscription error:', error)
+  );
+}
