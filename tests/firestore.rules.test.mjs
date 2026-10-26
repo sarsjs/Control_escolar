@@ -70,6 +70,10 @@ beforeEach(async () => {
       reason: "Correction", modifiedById: "director-a",
       modifiedByRole: "director",
     });
+    await setDoc(doc(db, "notifications", "notification-a"), {
+      schoolId: "school-a", targetUserId: "student-user",
+      message: "Emulator fixture only", createdAt: "2026-10-26T12:00:00Z",
+    });
   });
 });
 
@@ -89,6 +93,13 @@ test("school staff cannot read student records from another school", async () =>
 test("student cannot write attendance or enrollment fields directly", async () => {
   const db = asUser("student-user");
   await assertFails(updateDoc(doc(db, "students", "student-a"), { attendance: {} }));
+});
+
+test("student cannot submit or alter ETA fields directly on their enrollment", async () => {
+  const db = asUser("student-user");
+  await assertFails(updateDoc(doc(db, "students", "student-a"), {
+    etaMinutes: 15, etaReason: "Late bus", currentStatus: "en_route_delayed",
+  }));
 });
 
 test("director can create a group only for their own school", async () => {
@@ -123,6 +134,27 @@ test("school director may resolve a dispute without changing submitted evidence"
   }));
   await assertFails(updateDoc(doc(db, "disputes", "dispute-a"), {
     studentReason: "Changed evidence",
+  }));
+});
+
+test("director cannot resolve a dispute belonging to another school", async () => {
+  const db = asUser("director-b");
+  await assertFails(updateDoc(doc(db, "disputes", "dispute-a"), {
+    status: "rejected", resolvedBy: "director-b", resolvedAt: "2026-10-26T12:00:00Z",
+    resolutionNotes: "Not authorized",
+  }));
+});
+
+test("students and teachers cannot read or create notifications directly", async () => {
+  const studentDb = asUser("student-user");
+  const teacherDb = asUser("teacher-a");
+  await assertFails(getDoc(doc(studentDb, "notifications", "notification-a")));
+  await assertFails(getDoc(doc(teacherDb, "notifications", "notification-a")));
+  await assertFails(setDoc(doc(studentDb, "notifications", "student-notification"), {
+    schoolId: "school-a", targetUserId: "student-user", message: "Spoofed",
+  }));
+  await assertFails(setDoc(doc(teacherDb, "notifications", "teacher-notification"), {
+    schoolId: "school-a", targetUserId: "student-user", message: "Spoofed",
   }));
 });
 
