@@ -980,7 +980,6 @@ export default function App() {
             onOpenEtaModal={() => setEtaModalOpen(true)}
             onOpenCheckinModal={() => setCheckinModalOpen(true)}
             onOpenDisputeModal={() => setDisputeModalOpen(true)}
-            onSimulateCrossGate={handleCrossGate}
           />
         )}
         {currentUser.role === 'student' && (!currentStudent || !studentGroup || !studentActiveClass) && (
