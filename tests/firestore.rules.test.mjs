@@ -11,6 +11,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import test, { after, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
@@ -203,17 +204,17 @@ test("student can create an ETA report only for their own enrollment and group",
   await assertSucceeds(setDoc(doc(db, "eta_reports", "eta-valid"), {
     schoolId: "school-a", studentId: "student-a", studentName: "Test Student",
     groupId: "group-a", groupName: "1A", etaMinutes: 15,
-    reason: "Delayed bus", createdAt: new Date(), status: "pending",
+    reason: "Delayed bus", createdAt: serverTimestamp(), status: "pending",
   }));
   await assertFails(setDoc(doc(db, "eta_reports", "eta-spoofed"), {
     schoolId: "school-b", studentId: "student-b", studentName: "Other Student",
     groupId: "group-b", groupName: "1B", etaMinutes: 15,
-    reason: "Spoofed", createdAt: new Date(), status: "pending",
+    reason: "Spoofed", createdAt: serverTimestamp(), status: "pending",
   }));
   await assertFails(setDoc(doc(db, "eta_reports", "eta-invalid-minutes"), {
     schoolId: "school-a", studentId: "student-a", studentName: "Test Student",
     groupId: "group-a", groupName: "1A", etaMinutes: 999,
-    reason: "Invalid ETA", createdAt: new Date(), status: "pending",
+    reason: "Invalid ETA", createdAt: serverTimestamp(), status: "pending",
   }));
 });
 
