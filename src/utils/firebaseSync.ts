@@ -43,6 +43,38 @@ export function subscribeToGroups(
   );
 }
 
+/** Subscribe a student only to their own enrollment record. */
+export function subscribeToStudentById(
+  studentId: string | undefined,
+  onUpdate: (student: Student | null) => void
+) {
+  if (!studentId) {
+    onUpdate(null);
+    return () => {};
+  }
+  return onSnapshot(
+    doc(db, 'students', studentId),
+    (snapshot) => onUpdate(snapshot.exists() ? snapshot.data() as Student : null),
+    (error) => console.warn('Firestore own-student subscription error:', error)
+  );
+}
+
+/** Subscribe a student only to the group referenced by their own enrollment. */
+export function subscribeToGroupById(
+  groupId: string | undefined,
+  onUpdate: (group: SchoolGroup | null) => void
+) {
+  if (!groupId) {
+    onUpdate(null);
+    return () => {};
+  }
+  return onSnapshot(
+    doc(db, 'groups', groupId),
+    (snapshot) => onUpdate(snapshot.exists() ? snapshot.data() as SchoolGroup : null),
+    (error) => console.warn('Firestore assigned-group subscription error:', error)
+  );
+}
+
 /**
  * Sync single student update to Firestore
  */
