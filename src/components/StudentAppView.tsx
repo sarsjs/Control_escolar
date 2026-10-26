@@ -97,10 +97,9 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Tus Asistencias</span>
             <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-2xl font-black font-mono text-emerald-600">94.1%</span>
-              <span className="text-xs text-slate-500 font-medium">(32/34)</span>
+              <span className="text-sm font-bold text-slate-700">Sin historial</span>
             </div>
-            <span className="text-[10px] text-emerald-700 font-medium block mt-0.5">Asistencias validadas</span>
+            <span className="text-[10px] text-slate-500 font-medium block mt-0.5">Historial aún no disponible</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
             <CheckCircle2 className="w-5 h-5" />
@@ -112,10 +111,9 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-rose-800">Tus Faltas</span>
             <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-2xl font-black font-mono text-rose-600">2</span>
-              <span className="text-xs text-slate-500 font-medium">acumuladas</span>
+              <span className="text-sm font-bold text-slate-700">Sin historial</span>
             </div>
-            <span className="text-[10px] text-slate-500 block mt-0.5">1 justificada · 1 por revisar</span>
+            <span className="text-[10px] text-slate-500 block mt-0.5">No hay registros de faltas cargados</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
             <AlertTriangle className="w-5 h-5" />
@@ -128,7 +126,7 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
             <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-800">Horario de Hoy</span>
             <div className="flex items-baseline gap-1.5 mt-1">
               <span className="text-base font-bold text-slate-900 truncate max-w-[130px] block">
-                {activeClass?.subjectName || 'Matemáticas'}
+                {activeClass?.subjectName || 'Sin materia asignada'}
               </span>
             </div>
             <span className="text-[10px] text-indigo-700 font-mono block mt-0.5">
