@@ -78,6 +78,7 @@ export interface AuditLogEntry {
 
 export interface AttendanceDispute {
   id: string;
+  schoolId: string;
   attendanceId: string;
   studentId: string;
   studentName: string;
