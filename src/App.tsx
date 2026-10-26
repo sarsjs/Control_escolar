@@ -14,7 +14,6 @@ import {
   AuditLogEntry,
   AttendanceDispute,
   StudentPresenceStatus,
-  ValidationMethod,
   SchoolInstitution,
 } from './types';
 /* Real school records are loaded from Firestore; mock fixtures are intentionally not imported. */
@@ -344,93 +343,7 @@ export default function App() {
 
   };
 
-  // 2. Student crosses school gate (GPS triggers presence in campus)
-  const handleCrossGate = () => {
-    if (!currentStudent || !studentGroup) return;
-    const updatedStudent: Student = {
-      ...currentStudent,
-      currentStatus: 'on_campus_not_in_class',
-      currentZone: 'Plaza Cívica / Patios Centrales',
-      distanceToCampusMeters: 0,
-      lastUpdated: simulatedTime,
-    };
-
-    setStudents((prev) =>
-      prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
-    );
-    syncStudentToCloud(updatedStudent);
-
-    pushNotification(
-      'campus_arrival',
-      'Llegada al Plantel Detectada (GPS)',
-      `Has llegado al plantel. Recuerda que todavía necesitas confirmar tu presencia en tu salón de clase (${studentActiveClass?.classroom}).`,
-      'student',
-      {
-        studentId: currentStudent.id,
-        actionRequired: true,
-      }
-    );
-
-    if (studentOrientador) {
-      pushNotification(
-        'class_unattended',
-        `Alumno en Campus sin ingresar a aula (${studentGroup.name})`,
-        `${currentStudent.name} ingresó a las instalaciones pero aún no se registra en su aula de ${studentActiveClass?.subjectName} (${studentActiveClass?.classroom}).`,
-        'orientador',
-        {
-          orientadorId: studentOrientador.id,
-          groupId: studentGroup.id,
-          studentId: currentStudent.id,
-        }
-      );
-    }
-
-  };
-
-  // 3. Student leaves campus
-  const handleLeaveCampus = () => {
-    if (!currentStudent || !studentGroup) return;
-    const updatedStudent: Student = {
-      ...currentStudent,
-      currentStatus: 'outside_school',
-      currentZone: 'Fuera del Plantel (A 1.8 km)',
-      distanceToCampusMeters: 1800,
-      validatedVia: null,
-      validatedAt: undefined,
-      lastUpdated: simulatedTime,
-    };
-
-    setStudents((prev) =>
-      prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
-    );
-    syncStudentToCloud(updatedStudent);
-  };
-
-  // 4. Confirm classroom attendance via BLE, PIN, or QR
-  const handleConfirmAttendance = (method: ValidationMethod, validatedCode?: string) => {
-    if (!currentStudent || !studentGroup) return;
-    const updatedStudent: Student = {
-      ...currentStudent,
-      currentStatus: 'in_class',
-      currentZone: `${studentActiveClass?.classroom} (${studentActiveClass?.subjectName.split(' ')[0]})`,
-      validatedVia: method,
-      validatedAt: simulatedTime,
-      lastUpdated: simulatedTime,
-    };
-
-    setStudents((prev) =>
-      prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
-    );
-    syncStudentToCloud(updatedStudent);
-
-    pushNotification(
-      'class_validated',
-      'Asistencia Oficial en Aula Acreditada',
-      `${currentStudent.name} confirmó presencia en ${studentActiveClass?.classroom} mediante ${method.toUpperCase()} a las ${simulatedTime}.`,
-      'all'
-    );
-
-  };
+  // GPS arrival and classroom check-in handlers were removed: these events require real verification.
 
   // 5. Director corrects attendance with immutable audit logging
   const handleDirectorCorrectAttendance = (
@@ -721,23 +634,6 @@ export default function App() {
     }
   };
 
-  // 14. Teacher regenerates PIN
-  const handleRegeneratePin = () => {
-    if (!activeTeacherGroup) return;
-    const newCode = Math.floor(1000 + Math.random() * 9000).toString();
-    setGroups((prev) =>
-      prev.map((g) => {
-        if (g.id === activeTeacherGroup.id) {
-          return {
-            ...g,
-            schedule: g.schedule.map((s, idx) => (idx === 0 ? { ...s, currentPin: newCode } : s)),
-          };
-        }
-        return g;
-      })
-    );
-  };
-
   // 15. Teacher manual validate with audit
   const handleTeacherManualValidate = (studentId: string) => {
     handleDirectorCorrectAttendance(
@@ -955,7 +851,6 @@ export default function App() {
             allTeacherGroups={teacherAssignedGroups}
             students={students}
             onSelectGroup={setActiveTeacherGroup}
-            onRegeneratePin={handleRegeneratePin}
             onSendStudentAlert={(stId, stName) => {
               pushNotification(
                 'class_unattended',
