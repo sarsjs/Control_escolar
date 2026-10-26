@@ -33,7 +33,7 @@ import { Cloud, CloudCheck } from 'lucide-react';
 import {
   testFirestoreConnection,
   syncStudentToCloud,
-  recordAuditLogToCloud,
+  syncAttendanceCorrectionToCloud,
   recordDisputeToCloud,
   pushNotificationToCloud,
   subscribeToStudents,
@@ -363,15 +363,16 @@ export default function App() {
       lastUpdated: simulatedTime,
     };
 
-    // Persist first: do not show an official correction as saved if Firestore rejects it.
-    await syncStudentToCloud(updatedStudent);
-    setStudents((prev) =>
-      prev.map((s) => (s.id === studentId ? updatedStudent : s))
-    );
+    if (!currentUser?.schoolId || !currentUser.id) {
+      throw new Error('No se puede corregir asistencia sin una sesión escolar válida.');
+    }
 
-    // Create immutable audit log entry
+    // Save the attendance change and its audit evidence in one Firestore batch.
+    // If either write is rejected, neither is presented as completed in the UI.
     const newAuditLog: AuditLogEntry = {
       id: `aud-${Date.now()}`,
+      schoolId: currentUser.schoolId,
+      modifiedById: currentUser.id,
       attendanceId: `att-${studentId}-${Date.now()}`,
       studentId: targetStudent.id,
       studentName: targetStudent.name,
@@ -379,14 +380,17 @@ export default function App() {
       subjectName: studentActiveClass?.subjectName || 'Sin materia asignada',
       previousStatus,
       newStatus,
-      modifiedBy: currentUser?.name || 'Dirección General',
-      modifiedByRole: currentUser?.role || 'director',
+      modifiedBy: currentUser.name,
+      modifiedByRole: currentUser.role,
       reason,
       timestamp: simulatedTime,
     };
+    await syncAttendanceCorrectionToCloud(updatedStudent, newAuditLog);
 
+    setStudents((prev) =>
+      prev.map((s) => (s.id === studentId ? updatedStudent : s))
+    );
     setAuditLogs((prev) => [newAuditLog, ...prev]);
-    recordAuditLogToCloud(newAuditLog);
 
     pushNotification(
       'attendance_corrected',
