@@ -118,8 +118,20 @@ service cloud.firestore {
       allow read, create, update, delete: if isSuperAdmin();
     }
 
+    // Immutable audit evidence is scoped to a school and bound to the
+    // authenticated staff identity that performed the correction.
     match /audit_logs/{auditId} {
-      allow read, create: if isSuperAdmin();
+      allow read: if isSuperAdmin()
+        || (resource.data.schoolId is string && canAccessSchool(resource.data.schoolId));
+      allow create: if isSuperAdmin()
+        || (request.resource.data.schoolId is string
+          && canAccessSchool(request.resource.data.schoolId)
+          && profile().role in ['director', 'orientador']
+          && request.resource.data.modifiedById == request.auth.uid
+          && request.resource.data.modifiedByRole == profile().role
+          && request.resource.data.studentId is string
+          && request.resource.data.groupId is string
+          && request.resource.data.reason is string);
       allow update, delete: if false;
     }
 
