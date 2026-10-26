@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  type Query,
   where,
   setDoc,
   getDocs,
@@ -21,7 +22,7 @@ export { testFirestoreConnection };
  * Save a real school group to Firestore.
  */
 export async function syncGroupToCloud(group: SchoolGroup) {
-  await setDoc(doc(db, 'groups', group.id), group, { merge: true });
+  await setDoc(doc(db, 'groups', group.id), { ...group, teacherIds: [...new Set(group.schedule.map((slot) => slot.teacherId).filter(Boolean))] }, { merge: true });
 }
 
 /**
@@ -114,34 +115,51 @@ export async function createEtaReport(report: Omit<EtaReport, 'id' | 'createdAt'
   return ref.id;
 }
 
-/** Students receive only their own reports; school staff receive their school's reports. */
+/** Subscribe only to reports the signed-in user is authorized to receive. */
 export function subscribeToEtaReports(
   schoolId: string | undefined,
   isSuperAdmin: boolean,
   studentId: string | undefined,
-  isStudent: boolean,
+  role: string,
+  assignedGroupIds: string[],
   onUpdate: (reports: EtaReport[]) => void
 ) {
-  if (isStudent) {
-    if (!studentId) { onUpdate([]); return () => {}; }
-    return onSnapshot(query(collection(db, 'eta_reports'), where('studentId', '==', studentId)),
-      (snapshot) => onUpdate(snapshot.docs.map((item) => {
+  const reportsRef = collection(db, 'eta_reports');
+  const activeUnsubscribes: (() => void)[] = [];
+  const reportsByQuery = new Map<string, EtaReport[]>();
+  const emit = () => {
+    const merged = new Map<string, EtaReport>();
+    reportsByQuery.forEach((reports) => reports.forEach((report) => merged.set(report.id, report)));
+    onUpdate([...merged.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+  };
+  const listen = (key: string, q: Query) => {
+    activeUnsubscribes.push(onSnapshot(q, (snapshot) => {
+      reportsByQuery.set(key, snapshot.docs.map((item) => {
         const data = item.data();
         const createdAt = data.createdAt?.toDate?.();
         return { ...data, id: item.id, createdAt: createdAt instanceof Date ? createdAt.toISOString() : '' } as EtaReport;
-      })),
-      (error) => console.warn('Firestore own ETA report subscription error:', error));
+      }));
+      emit();
+    }, (error) => {
+      console.warn('Firestore ETA report subscription error:', error);
+      reportsByQuery.set(key, []);
+      emit();
+    }));
+  };
+  if (role === 'student') {
+    if (studentId) listen('student', query(reportsRef, where('studentId', '==', studentId)));
+  } else if (isSuperAdmin) {
+    listen('superadmin', query(reportsRef));
+  } else if (role === 'director' && schoolId) {
+    listen('director', query(reportsRef, where('schoolId', '==', schoolId)));
+  } else if (schoolId && ['orientador', 'teacher'].includes(role)) {
+    [...new Set(assignedGroupIds)].forEach((groupId) => {
+      listen(groupId, query(reportsRef, where('schoolId', '==', schoolId), where('groupId', '==', groupId)));
+    });
+  } else {
+    onUpdate([]);
   }
-  if (!isSuperAdmin && !schoolId) { onUpdate([]); return () => {}; }
-  const reportsRef = collection(db, 'eta_reports');
-  const scopedQuery = isSuperAdmin ? reportsRef : query(reportsRef, where('schoolId', '==', schoolId));
-  return onSnapshot(scopedQuery,
-    (snapshot) => onUpdate(snapshot.docs.map((item) => {
-      const data = item.data();
-      const createdAt = data.createdAt?.toDate?.();
-      return { ...data, id: item.id, createdAt: createdAt instanceof Date ? createdAt.toISOString() : '' } as EtaReport;
-    })),
-    (error) => console.warn('Firestore ETA report subscription error:', error));
+  return () => activeUnsubscribes.forEach((unsubscribe) => unsubscribe());
 }
 
 /**
