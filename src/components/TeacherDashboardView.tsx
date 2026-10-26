@@ -259,11 +259,11 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
           <div className="flex items-center gap-2.5">
             <ShieldAlert className="w-5 h-5 text-amber-700" />
             <h4 className="text-sm font-bold text-amber-950">
-              Atención Docente: {onCampusOutsideStudents.length} alumno(s) de tu grupo {activeGroup.name} detectado(s) dentro de la escuela pero ausente(s) en tu salón ({activeClass?.classroom})
+              Revisión pendiente: {onCampusOutsideStudents.length} registro(s) de tu grupo {activeGroup.name} aparecen sin confirmación en el salón ({activeClass?.classroom})
             </h4>
           </div>
           <p className="text-xs text-amber-900 leading-relaxed">
-            El sistema confirma que estos estudiantes ya entraron al plantel, pero no han ingresado el código PIN de tu clase ni se detectan con la baliza Bluetooth del salón.
+            Estos registros aún no cuentan con una validación real de ubicación o de aula. La integración de GPS, PIN y Bluetooth sigue pendiente.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
@@ -297,10 +297,11 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onManualValidateStudent(st.id)}
-                    className="px-2.5 py-1 text-[11px] font-semibold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors"
+                    disabled
+                    title="La confirmación de asistencia requiere un flujo seguro conectado a Firestore."
+                    className="px-2.5 py-1 text-[11px] font-semibold text-slate-500 bg-slate-100 rounded-lg cursor-not-allowed"
                   >
-                    Marcar Presente
+                    Validación pendiente
                   </button>
                 </div>
               </div>
