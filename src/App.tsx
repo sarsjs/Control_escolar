@@ -232,6 +232,7 @@ export default function App() {
       unsubscribeStudents?.();
       unsubscribeGroups?.();
       unsubscribeStudentGroup?.();
+      unsubscribeSchools();
     };
   }, [currentUser?.id]);
 
@@ -595,31 +596,43 @@ export default function App() {
   };
 
   // 11. Orientador updates schedule
-  const handleCreateGroupForOrientador = (name: string, semester: number, turn: 'Matutino' | 'Vespertino') => {
-    if (!currentOrientadorEntity) return;
+  const handleCreateGroupForOrientador = async (name: string, semester: number, turn: 'Matutino' | 'Vespertino') => {
+    if (!currentOrientadorEntity || !currentUser?.schoolId) {
+      console.error('No se puede crear el grupo: falta vincular al orientador con un plantel real.');
+      return;
+    }
     const newGroup: SchoolGroup = {
       id: `grp-${Date.now()}`,
       name,
       semester,
       turn,
       orientadorId: currentOrientadorEntity.id,
-      ...(currentUser?.schoolId ? { schoolId: currentUser.schoolId } : {}),
+      schoolId: currentUser.schoolId,
       studentIds: [],
       schedule: [],
     };
-    setGroups((prev) => [...prev, newGroup]);
-    void syncGroupToCloud(newGroup).catch((error) => console.error('No se pudo guardar el grupo en Firestore:', error));
-    setOrientadores((prev) => prev.map((orientador) => orientador.id === currentOrientadorEntity.id
-      ? { ...orientador, assignedGroupIds: [...orientador.assignedGroupIds, newGroup.id] }
-      : orientador));
+    try {
+      await syncGroupToCloud(newGroup);
+      setGroups((prev) => [...prev, newGroup]);
+      setOrientadores((prev) => prev.map((orientador) => orientador.id === currentOrientadorEntity.id
+        ? { ...orientador, assignedGroupIds: [...orientador.assignedGroupIds, newGroup.id] }
+        : orientador));
+    } catch (error) {
+      console.error('No se pudo guardar el grupo en Firestore:', error);
+    }
   };
 
-  const handleUpdateGroupSchedule = (groupId: string, newSchedule: GroupScheduleItem[]) => {
+  const handleUpdateGroupSchedule = async (groupId: string, newSchedule: GroupScheduleItem[]) => {
     const group = groups.find((item) => item.id === groupId);
     if (!group) return;
     const updatedGroup = { ...group, schedule: newSchedule };
-    setGroups((prev) => prev.map((g) => (g.id === groupId ? updatedGroup : g)));
-    void syncGroupToCloud(updatedGroup).catch((error) => console.error('No se pudo guardar el horario en Firestore:', error));
+    try {
+      await syncGroupToCloud(updatedGroup);
+      setGroups((prev) => prev.map((g) => (g.id === groupId ? updatedGroup : g)));
+    } catch (error) {
+      console.error('No se pudo guardar el horario en Firestore:', error);
+      return;
+    }
 
     pushNotification(
       'schedule_updated',
