@@ -223,3 +223,19 @@ export function subscribeToDisputes(
     (error) => console.warn('Firestore dispute subscription error:', error)
   );
 }
+
+/** Persist a dispute decision and optional attendance correction as one Firestore batch. */
+export async function resolveDisputeToCloud(dispute: AttendanceDispute, student?: Student, auditEntry?: AuditLogEntry) {
+  if (!dispute.schoolId) throw new Error('La solicitud no tiene escuela asignada.');
+  if ((student && !auditEntry) || (!student && auditEntry)) throw new Error('La corrección requiere alumno y auditoría juntos.');
+  if (student && (student.schoolId !== dispute.schoolId || student.id !== dispute.studentId || auditEntry?.schoolId !== dispute.schoolId || auditEntry?.studentId !== dispute.studentId || !auditEntry.modifiedById)) {
+    throw new Error('La solicitud, el alumno y la auditoría no corresponden.');
+  }
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'disputes', dispute.id), dispute, { merge: true });
+  if (student && auditEntry) {
+    batch.set(doc(db, 'students', student.id), student, { merge: true });
+    batch.set(doc(db, 'audit_logs', auditEntry.id), auditEntry);
+  }
+  await batch.commit();
+}
