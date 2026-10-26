@@ -38,7 +38,7 @@ interface DirectorDashboardViewProps {
   simulatedTime: string;
   onReassignGroupToOrientador: (groupId: string, newOrientadorId: string) => void;
   onAssignTemporarySubstitute: (groupId: string, substituteOrientadorId?: string) => void;
-  onCreateNewGroup?: (name: string, semester: number, orientadorId: string) => void;
+  onCreateNewGroup?: (name: string, semester: number, orientadorId: string) => Promise<void>;
   onDirectorCorrectAttendance: (
     studentId: string,
     newStatus: StudentPresenceStatus,
@@ -64,6 +64,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'matrix' | 'audit' | 'groups' | 'disputes'>('matrix');
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [groupCreateError, setGroupCreateError] = useState<string>('');
 
   // Modals
   const [isAddGroupOpen, setIsAddGroupOpen] = useState<boolean>(false);
@@ -102,14 +103,20 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
     setTimeout(() => setSuccessMessage(''), 4000);
   };
 
-  const handleCreateGroup = (e: React.FormEvent) => {
+  const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim() || !onCreateNewGroup) return;
-    onCreateNewGroup(newGroupName, newGroupSemester, newGroupOrientador);
-    setNewGroupName('');
-    setIsAddGroupOpen(false);
-    setSuccessMessage('Nuevo grupo registrado y asignado exitosamente.');
-    setTimeout(() => setSuccessMessage(''), 4000);
+    setGroupCreateError('');
+    try {
+      await onCreateNewGroup(newGroupName.trim(), newGroupSemester, newGroupOrientador);
+      setNewGroupName('');
+      setIsAddGroupOpen(false);
+      setSuccessMessage('Nuevo grupo guardado correctamente.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (error) {
+      console.error('No se pudo guardar el grupo:', error);
+      setGroupCreateError('No se pudo guardar el grupo. Verifica tu conexión y permisos; no se registró como creado.');
+    }
   };
 
   const handleSaveCorrection = (e: React.FormEvent) => {
