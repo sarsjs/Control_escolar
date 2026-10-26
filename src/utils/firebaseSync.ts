@@ -9,9 +9,11 @@ import {
   orderBy,
   limit,
   writeBatch,
+  addDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, testFirestoreConnection } from '../firebase';
-import { Student, SchoolGroup, AuditLogEntry, AttendanceDispute, SystemNotification, SchoolInstitution } from '../types';
+import { Student, SchoolGroup, AuditLogEntry, AttendanceDispute, SystemNotification, SchoolInstitution, EtaReport } from '../types';
 
 export { testFirestoreConnection };
 
@@ -101,11 +103,45 @@ export async function recordDisputeToCloud(dispute: AttendanceDispute) {
   await setDoc(doc(db, 'disputes', dispute.id), dispute, { merge: true });
 }
 
-/**
- * Broadcast notification to Firestore
- */
-export async function pushNotificationToCloud(notification: SystemNotification) {
-  await setDoc(doc(db, 'notifications', notification.id), notification);
+
+/** Save an ETA report separately; it never mutates enrollment or attendance. */
+export async function createEtaReport(report: Omit<EtaReport, 'id' | 'createdAt' | 'status'>) {
+  const ref = await addDoc(collection(db, 'eta_reports'), {
+    ...report,
+    createdAt: serverTimestamp(),
+    status: 'pending',
+  });
+  return ref.id;
+}
+
+/** Students receive only their own reports; school staff receive their school's reports. */
+export function subscribeToEtaReports(
+  schoolId: string | undefined,
+  isSuperAdmin: boolean,
+  studentId: string | undefined,
+  isStudent: boolean,
+  onUpdate: (reports: EtaReport[]) => void
+) {
+  if (isStudent) {
+    if (!studentId) { onUpdate([]); return () => {}; }
+    return onSnapshot(query(collection(db, 'eta_reports'), where('studentId', '==', studentId)),
+      (snapshot) => onUpdate(snapshot.docs.map((item) => {
+        const data = item.data();
+        const createdAt = data.createdAt?.toDate?.();
+        return { ...data, id: item.id, createdAt: createdAt instanceof Date ? createdAt.toISOString() : '' } as EtaReport;
+      })),
+      (error) => console.warn('Firestore own ETA report subscription error:', error));
+  }
+  if (!isSuperAdmin && !schoolId) { onUpdate([]); return () => {}; }
+  const reportsRef = collection(db, 'eta_reports');
+  const scopedQuery = isSuperAdmin ? reportsRef : query(reportsRef, where('schoolId', '==', schoolId));
+  return onSnapshot(scopedQuery,
+    (snapshot) => onUpdate(snapshot.docs.map((item) => {
+      const data = item.data();
+      const createdAt = data.createdAt?.toDate?.();
+      return { ...data, id: item.id, createdAt: createdAt instanceof Date ? createdAt.toISOString() : '' } as EtaReport;
+    })),
+    (error) => console.warn('Firestore ETA report subscription error:', error));
 }
 
 /**
