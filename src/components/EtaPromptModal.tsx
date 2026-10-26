@@ -5,7 +5,7 @@ import { GroupScheduleItem, Orientador } from '../types';
 interface EtaPromptModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmitEta: (minutes: number, reason: string) => void;
+  onSubmitEta: (minutes: number, reason: string) => void | Promise<void>;
   entryTime: string;
   activeClass?: GroupScheduleItem;
   orientador?: Orientador;
@@ -25,6 +25,7 @@ export const EtaPromptModal: React.FC<EtaPromptModalProps> = ({
   const [reason, setReason] = useState<string>('Tráfico denso en la ruta');
   const [customMinutes, setCustomMinutes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -44,15 +45,27 @@ export const EtaPromptModal: React.FC<EtaPromptModalProps> = ({
     'Imprevisto familiar / doméstico',
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setIsSubmitting(true);
-    const finalMinutes = customMinutes ? parseInt(customMinutes, 10) || selectedMinutes : selectedMinutes;
-    setTimeout(() => {
-      onSubmitEta(finalMinutes, reason);
+    setSubmitError('');
+    const parsedCustomMinutes = Number.parseInt(customMinutes, 10);
+    const finalMinutes = customMinutes ? parsedCustomMinutes : selectedMinutes;
+    if (!Number.isInteger(finalMinutes) || finalMinutes < 1 || finalMinutes > 120) {
+      setSubmitError('Indica un tiempo entre 1 y 120 minutos.');
       setIsSubmitting(false);
+      return;
+    }
+    try {
+      await onSubmitEta(finalMinutes, reason);
       onClose();
-    }, 400);
+    } catch (error) {
+      console.error('No se pudo registrar el aviso de llegada:', error);
+      setSubmitError('No se pudo enviar el aviso. No se registró como enviado; inténtalo más tarde o avisa directamente a tu orientador.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -171,13 +184,19 @@ export const EtaPromptModal: React.FC<EtaPromptModalProps> = ({
           <div className="rounded-xl bg-slate-50 border border-slate-200 p-3.5 space-y-1.5 text-xs text-slate-600">
             <div className="flex items-center gap-2 font-medium text-slate-800">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>Transmisión en tiempo real a tus autoridades:</span>
+              <span>El aviso se confirmará solo si se guarda correctamente:</span>
             </div>
             <p className="text-[11px] text-slate-500 pl-6 leading-relaxed">
-              • Tu Orientador a cargo: <strong>{orientador?.name || 'Orientación Educativa'}</strong><br />
-              • Tu Docente en curso: <strong>{activeClass?.teacherName || 'Prof. Roberto Gómez'}</strong> ({activeClass?.subjectName || 'Matemáticas'})
+              • Orientador a cargo: <strong>{orientador?.name || 'Orientación Educativa'}</strong><br />
+              • Tu Docente en curso: <strong>{activeClass?.teacherName || 'Docente asignado'}</strong> ({activeClass?.subjectName || 'Materia asignada'})
             </p>
           </div>
+
+          {submitError && (
+            <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+              {submitError}
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-3 pt-2">
