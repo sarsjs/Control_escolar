@@ -440,37 +440,55 @@ export default function App() {
 
   // 7. Resolve dispute by Orientador or Director
   const handleResolveDispute = async (disputeId: string, approved: boolean, notes: string) => {
-    const dispute = disputes.find((d) => d.id === disputeId);
-    if (!dispute) return;
-
+    const dispute = disputes.find((item) => item.id === disputeId);
+    if (!dispute || !currentUser) throw new Error('Solicitud o sesión no disponible.');
+    if (!['director', 'orientador', 'superadmin'].includes(currentUser.role)) {
+      throw new Error('No tienes permiso para resolver esta solicitud.');
+    }
+    const now = new Date().toISOString();
     const updatedDispute: AttendanceDispute = {
       ...dispute,
       status: approved ? 'approved' : 'rejected',
-      resolvedBy: currentUser?.name,
-      resolvedAt: simulatedTime,
+      resolvedBy: currentUser.name,
+      resolvedAt: now,
       resolutionNotes: notes,
     };
-
-    setDisputes((prev) =>
-      prev.map((d) => (d.id === disputeId ? updatedDispute : d))
-    );
-    recordDisputeToCloud(updatedDispute);
-
     if (approved) {
-      handleDirectorCorrectAttendance(
-        dispute.studentId,
-        'in_class',
-        `Revisión aprobada por ${currentUser?.name}: ${notes}`
-      );
+      const student = students.find((item) => item.id === dispute.studentId);
+      if (!student) throw new Error('No se encontró la inscripción del alumno.');
+      if (!currentUser.schoolId || student.schoolId !== currentUser.schoolId || dispute.schoolId !== currentUser.schoolId) {
+        throw new Error('La solicitud no pertenece a tu escuela.');
+      }
+      const correctedStudent: Student = {
+        ...student,
+        currentStatus: 'in_class',
+        validatedVia: 'director_correction',
+        validatedAt: now,
+        lastUpdated: now,
+      };
+      const auditEntry: AuditLogEntry = {
+        id: 'aud-' + Date.now(),
+        schoolId: currentUser.schoolId,
+        modifiedById: currentUser.id,
+        attendanceId: dispute.attendanceId,
+        studentId: student.id,
+        studentName: student.name,
+        groupId: student.groupId,
+        subjectName: dispute.subjectName,
+        previousStatus: student.currentStatus,
+        newStatus: 'in_class',
+        modifiedBy: currentUser.name,
+        modifiedByRole: currentUser.role,
+        reason: 'Revisión aprobada por ' + currentUser.name + ': ' + notes,
+        timestamp: now,
+      };
+      await resolveDisputeToCloud(updatedDispute, correctedStudent, auditEntry);
+      setStudents((prev) => prev.map((item) => item.id === student.id ? correctedStudent : item));
+      setAuditLogs((prev) => [auditEntry, ...prev]);
+    } else {
+      await resolveDisputeToCloud(updatedDispute);
     }
-
-    pushNotification(
-      'dispute_resolved',
-      `Resolución de Revisión de Asistencia`,
-      `Tu solicitud para ${dispute.subjectName} fue ${approved ? 'APROBADA' : 'RECHAZADA'} por ${currentUser?.name}. Notas: ${notes}`,
-      'student',
-      { studentId: dispute.studentId }
-    );
+    setDisputes((prev) => prev.map((item) => item.id === disputeId ? updatedDispute : item));
   };
 
   // 8. Director reassigns group
