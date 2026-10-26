@@ -527,7 +527,10 @@ export default function App() {
   };
 
   // 10. Director creates new group
-  const handleCreateNewGroup = (name: string, semester: number, orientadorId: string) => {
+  const handleCreateNewGroup = async (name: string, semester: number, orientadorId: string) => {
+    if (!currentUser || !['director', 'superadmin'].includes(currentUser.role) || !currentUser.schoolId) {
+      throw new Error('No hay una sesión autorizada con escuela asignada para crear el grupo.');
+    }
     const newId = `grp-${Date.now()}`;
     const newGroup: SchoolGroup = {
       id: newId,
@@ -535,16 +538,17 @@ export default function App() {
       semester,
       turn: 'Matutino',
       orientadorId,
-      ...(currentUser?.schoolId ? { schoolId: currentUser.schoolId } : {}),
+      schoolId: currentUser.schoolId,
       studentIds: [],
       schedule: [],
     };
 
+    // Persist first; do not show a group as created if Firestore rejects the write.
+    await syncGroupToCloud(newGroup);
     setGroups((prev) => [...prev, newGroup]);
-    void syncGroupToCloud(newGroup).catch((error) => console.error('No se pudo guardar el grupo en Firestore:', error));
     setOrientadores((prev) =>
       prev.map((o) =>
-        o.id === orientadorId ? { ...o, assignedGroupIds: [...o.assignedGroupIds, newId] } : o
+        o.id === orientadorId ? { ...o, assignedGroupIds: [...new Set([...o.assignedGroupIds, newId])] } : o
       )
     );
   };
