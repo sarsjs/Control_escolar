@@ -38,6 +38,8 @@ import {
   recordDisputeToCloud,
   pushNotificationToCloud,
   subscribeToStudents,
+  subscribeToStudentById,
+  subscribeToGroupById,
   syncSchoolToCloud,
   subscribeToSchools,
   syncGroupToCloud,
@@ -190,12 +192,36 @@ export default function App() {
 
     // Attendance records must come from Firestore, never from demo fixtures.
     const isSuperAdmin = currentUser.role === 'superadmin';
-    const unsubscribeStudents = subscribeToStudents(currentUser.schoolId, isSuperAdmin, (cloudStudents) => {
-      setStudents(cloudStudents);
-    });
-    const unsubscribeGroups = subscribeToGroups(currentUser.schoolId, isSuperAdmin, (cloudGroups) => {
-      setGroups(cloudGroups);
-    });
+    let unsubscribeStudents: (() => void) | undefined;
+    let unsubscribeGroups: (() => void) | undefined;
+    let unsubscribeStudentGroup: (() => void) | undefined;
+
+    if (currentUser.role === 'student') {
+      // Students must not query the whole school roster. Read only their own
+      // enrollment, then only the group referenced by that enrollment.
+      setStudents([]);
+      setGroups([]);
+      unsubscribeStudents = subscribeToStudentById(currentUser.linkedEntityId, (student) => {
+        setStudents(student ? [student] : []);
+        if (unsubscribeStudentGroup) {
+          unsubscribeStudentGroup();
+          unsubscribeStudentGroup = undefined;
+        }
+        setGroups([]);
+        if (student?.groupId) {
+          unsubscribeStudentGroup = subscribeToGroupById(student.groupId, (group) => {
+            setGroups(group ? [group] : []);
+          });
+        }
+      });
+    } else {
+      unsubscribeStudents = subscribeToStudents(currentUser.schoolId, isSuperAdmin, (cloudStudents) => {
+        setStudents(cloudStudents);
+      });
+      unsubscribeGroups = subscribeToGroups(currentUser.schoolId, isSuperAdmin, (cloudGroups) => {
+        setGroups(cloudGroups);
+      });
+    }
 
     // Firestore is the source of truth, including when a school collection is empty.
     const unsubscribeSchools = subscribeToSchools(currentUser.schoolId, isSuperAdmin, (cloudSchools) => {
@@ -203,9 +229,9 @@ export default function App() {
     });
 
     return () => {
-      if (typeof unsubscribeStudents === 'function') unsubscribeStudents();
-      if (typeof unsubscribeGroups === 'function') unsubscribeGroups();
-      if (typeof unsubscribeSchools === 'function') unsubscribeSchools();
+      unsubscribeStudents?.();
+      unsubscribeGroups?.();
+      unsubscribeStudentGroup?.();
     };
   }, [currentUser?.id]);
 
