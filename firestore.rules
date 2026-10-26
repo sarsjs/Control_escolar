@@ -34,6 +34,20 @@ service cloud.firestore {
         && profile().schoolId == schoolId;
     }
 
+    function isOwnStudent(studentId) {
+      return hasProfile()
+        && profile().role == 'student'
+        && profile().linkedEntityId == studentId;
+    }
+
+    function canReadAssignedGroup(groupId) {
+      return hasProfile()
+        && profile().role == 'student'
+        && profile().linkedEntityId is string
+        && exists(/databases/$(database)/documents/students/$(profile().linkedEntityId))
+        && get(/databases/$(database)/documents/students/$(profile().linkedEntityId)).data.groupId == groupId;
+    }
+
     function canManageGroups(schoolId) {
       return isSuperAdmin()
         || (canAccessSchool(schoolId)
@@ -67,6 +81,7 @@ service cloud.firestore {
     // Every student/group record must carry schoolId to be accessible by school staff.
     match /students/{studentId} {
       allow read: if isSuperAdmin()
+        || isOwnStudent(studentId)
         || (resource.data.schoolId is string && canAccessSchool(resource.data.schoolId));
       allow create: if isSuperAdmin()
         || (request.resource.data.schoolId is string
@@ -74,7 +89,21 @@ service cloud.firestore {
       allow update: if isSuperAdmin()
         || (resource.data.schoolId is string
           && request.resource.data.schoolId == resource.data.schoolId
-          && canManageStudents(resource.data.schoolId));
+          && canManageStudents(resource.data.schoolId))
+        || (isOwnStudent(studentId)
+          && request.resource.data.schoolId == resource.data.schoolId
+          && request.resource.data.groupId == resource.data.groupId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'currentStatus',
+            'currentZone',
+            'distanceToCampusMeters',
+            'lastUpdated',
+            'etaMinutes',
+            'etaReason',
+            'etaSentAt',
+            'validatedVia',
+            'validatedAt'
+          ]));
       allow delete: if isSuperAdmin()
         || (resource.data.schoolId is string
           && canAccessSchool(resource.data.schoolId)
@@ -83,6 +112,7 @@ service cloud.firestore {
 
     match /groups/{groupId} {
       allow read: if isSuperAdmin()
+        || canReadAssignedGroup(groupId)
         || (resource.data.schoolId is string && canAccessSchool(resource.data.schoolId));
       allow create: if request.resource.data.schoolId is string
         && canManageGroups(request.resource.data.schoolId);
