@@ -61,6 +61,8 @@ export interface AttendanceRecord {
 
 export interface AuditLogEntry {
   id: string;
+  schoolId?: string;
+  modifiedById?: string;
   attendanceId: string;
   studentId: string;
   studentName: string;
