@@ -346,7 +346,7 @@ export default function App() {
   // GPS arrival and classroom check-in handlers were removed: these events require real verification.
 
   // 5. Director corrects attendance with immutable audit logging
-  const handleDirectorCorrectAttendance = (
+  const handleDirectorCorrectAttendance = async (
     studentId: string,
     newStatus: StudentPresenceStatus,
     reason: string
@@ -363,10 +363,11 @@ export default function App() {
       lastUpdated: simulatedTime,
     };
 
+    // Persist first: do not show an official correction as saved if Firestore rejects it.
+    await syncStudentToCloud(updatedStudent);
     setStudents((prev) =>
       prev.map((s) => (s.id === studentId ? updatedStudent : s))
     );
-    syncStudentToCloud(updatedStudent);
 
     // Create immutable audit log entry
     const newAuditLog: AuditLogEntry = {
@@ -375,7 +376,7 @@ export default function App() {
       studentId: targetStudent.id,
       studentName: targetStudent.name,
       groupId: targetStudent.groupId,
-      subjectName: studentActiveClass?.subjectName || 'Matemáticas II',
+      subjectName: studentActiveClass?.subjectName || 'Sin materia asignada',
       previousStatus,
       newStatus,
       modifiedBy: currentUser?.name || 'Dirección General',
@@ -406,7 +407,7 @@ export default function App() {
       studentName: currentStudent.name,
       groupId: currentStudent.groupId,
       subjectName: studentActiveClass?.subjectName || 'Matemáticas II',
-      date: '2026-10-22',
+      date: new Date().toISOString().slice(0, 10),
       studentReason: reason,
       status: 'pending',
     };
