@@ -6,7 +6,6 @@ interface ClassCheckinModalProps {
   isOpen: boolean;
   onClose: () => void;
   activeClass: GroupScheduleItem;
-  onConfirmAttendance: (method: any, validatedCode?: string) => void;
 }
 
 /**
