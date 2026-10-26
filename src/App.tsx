@@ -445,6 +445,12 @@ export default function App() {
     if (!['director', 'orientador', 'superadmin'].includes(currentUser.role)) {
       throw new Error('No tienes permiso para resolver esta solicitud.');
     }
+    if (!dispute.schoolId) throw new Error('La solicitud no tiene escuela asignada.');
+    const isSuperAdmin = currentUser.role === 'superadmin';
+    if (!isSuperAdmin && currentUser.schoolId !== dispute.schoolId) {
+      throw new Error('La solicitud no pertenece a tu escuela.');
+    }
+
     const now = new Date().toISOString();
     const updatedDispute: AttendanceDispute = {
       ...dispute,
@@ -456,8 +462,8 @@ export default function App() {
     if (approved) {
       const student = students.find((item) => item.id === dispute.studentId);
       if (!student) throw new Error('No se encontró la inscripción del alumno.');
-      if (!currentUser.schoolId || student.schoolId !== currentUser.schoolId || dispute.schoolId !== currentUser.schoolId) {
-        throw new Error('La solicitud no pertenece a tu escuela.');
+      if (student.schoolId !== dispute.schoolId) {
+        throw new Error('La inscripción del alumno no corresponde a la escuela de la solicitud.');
       }
       const correctedStudent: Student = {
         ...student,
@@ -468,7 +474,7 @@ export default function App() {
       };
       const auditEntry: AuditLogEntry = {
         id: 'aud-' + Date.now(),
-        schoolId: currentUser.schoolId,
+        schoolId: dispute.schoolId,
         modifiedById: currentUser.id,
         attendanceId: dispute.attendanceId,
         studentId: student.id,
