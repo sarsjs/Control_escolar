@@ -8,6 +8,7 @@ import {
   query,
   orderBy,
   limit,
+  writeBatch,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, testFirestoreConnection } from '../firebase';
 import { Student, SchoolGroup, AuditLogEntry, AttendanceDispute, SystemNotification, SchoolInstitution } from '../types';
@@ -82,16 +83,15 @@ export async function syncStudentToCloud(student: Student) {
   await setDoc(doc(db, 'students', student.id), student, { merge: true });
 }
 
-/**
- * Record immutable audit log entry in Firestore
- */
-export async function recordAuditLogToCloud(entry: AuditLogEntry) {
-  const path = `audit_logs/${entry.id}`;
-  try {
-    await setDoc(doc(db, 'audit_logs', entry.id), entry);
-  } catch (error) {
-    console.warn('Audit log cloud recording deferred:', error);
+/** Atomically save an attendance correction and its immutable audit record. */
+export async function syncAttendanceCorrectionToCloud(student: Student, entry: AuditLogEntry) {
+  if (!student.schoolId || entry.schoolId !== student.schoolId || !entry.modifiedById) {
+    throw new Error('La corrección requiere escuela y usuario autenticado válidos.');
   }
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'students', student.id), student, { merge: true });
+  batch.set(doc(db, 'audit_logs', entry.id), entry);
+  await batch.commit();
 }
 
 /**
