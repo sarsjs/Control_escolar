@@ -15,6 +15,7 @@ import {
   AttendanceDispute,
   StudentPresenceStatus,
   SchoolInstitution,
+  EtaReport,
 } from './types';
 /* Real school records are loaded from Firestore; mock fixtures are intentionally not imported. */
 import { Navbar } from './components/Navbar';
@@ -36,7 +37,8 @@ import {
   syncAttendanceCorrectionToCloud,
   recordDisputeToCloud,
   resolveDisputeToCloud,
-  pushNotificationToCloud,
+  createEtaReport,
+  subscribeToEtaReports,
   subscribeToStudents,
   subscribeToStudentById,
   subscribeToGroupById,
@@ -66,6 +68,7 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [disputes, setDisputes] = useState<AttendanceDispute[]>([]);
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+  const [etaReports, setEtaReports] = useState<EtaReport[]>([]);
 
   // Use the device's real local time for audit and notification timestamps.
   const [simulatedTime, setSimulatedTime] = useState<string>(() =>
@@ -196,6 +199,7 @@ export default function App() {
     let unsubscribeStudents: (() => void) | undefined;
     let unsubscribeGroups: (() => void) | undefined;
     let unsubscribeStudentGroup: (() => void) | undefined;
+    const unsubscribeEtaReports = subscribeToEtaReports(currentUser.schoolId, isSuperAdmin, currentUser.linkedEntityId, currentUser.role === 'student', setEtaReports);
     const unsubscribeDisputes = subscribeToDisputes(
       currentUser.schoolId,
       isSuperAdmin,
@@ -242,6 +246,7 @@ export default function App() {
       unsubscribeStudentGroup?.();
       unsubscribeSchools();
       unsubscribeDisputes();
+      unsubscribeEtaReports();
     };
   }, [currentUser?.id]);
 
@@ -271,13 +276,45 @@ export default function App() {
       ...details,
     };
     setNotifications((prev) => [newNotif, ...prev]);
-    pushNotificationToCloud(newNotif);
   };
 
+  // Show live ETA reports only to staff responsible for the report's group.
+  useEffect(() => {
+    if (!currentUser || currentUser.role === 'student') return;
+    const visibleReports = etaReports.filter((report) => {
+      if (currentUser.role === 'superadmin' || currentUser.role === 'director') return true;
+      const group = groups.find((item) => item.id === report.groupId);
+      if (!group) return false;
+      if (currentUser.role === 'orientador') return group.orientadorId === currentUser.linkedEntityId || group.temporarySubstituteOrientadorId === currentUser.linkedEntityId;
+      if (currentUser.role === 'teacher') return group.schedule.some((slot) => slot.teacherId === currentUser.linkedEntityId);
+      return false;
+    });
+    const reportNotifications: SystemNotification[] = visibleReports.map((report) => ({
+      id: `eta-report-${report.id}`,
+      type: currentUser.role === 'teacher' ? 'teacher_eta_alert' : 'orientador_eta_alert',
+      title: `Aviso ETA: ${report.studentName} · ${report.groupName}`,
+      message: `${report.studentName} estima llegar en ${report.etaMinutes} min. Motivo: ${report.reason}.`,
+      timestamp: report.createdAt ? new Date(report.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'Reciente',
+      targetRole: currentUser.role, targetUserId: currentUser.id, groupId: report.groupId, studentId: report.studentId,
+      read: false, actionRequired: true,
+    }));
+    setNotifications((prev) => [...reportNotifications, ...prev.filter((item) => !item.id.startsWith('eta-report-'))]);
+  }, [etaReports, groups, currentUser?.id, currentUser?.role, currentUser?.linkedEntityId]);
+
   // Primary active student (Sofía Morales)
-  const currentStudent = currentUser?.role === 'student'
+  const baseCurrentStudent = currentUser?.role === 'student'
     ? students.find((s) => s.id === currentUser.linkedEntityId)
     : undefined;
+  const latestOwnEtaReport = currentUser?.role === 'student'
+    ? etaReports.filter((report) => report.studentId === currentUser.linkedEntityId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+    : undefined;
+  const currentStudent = baseCurrentStudent && latestOwnEtaReport
+    ? { ...baseCurrentStudent, currentStatus: 'en_route_delayed' as StudentPresenceStatus,
+        currentZone: 'En camino hacia el plantel', etaMinutes: latestOwnEtaReport.etaMinutes,
+        etaReason: latestOwnEtaReport.reason,
+        etaSentAt: latestOwnEtaReport.createdAt ? new Date(latestOwnEtaReport.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'Aviso enviado' }
+    : baseCurrentStudent;
   const studentGroup = currentStudent
     ? groups.find((g) => g.id === currentStudent.groupId)
     : undefined;
@@ -305,51 +342,16 @@ export default function App() {
     if (!currentStudent || !studentGroup) {
       throw new Error('No se encontró una inscripción escolar activa para enviar el aviso.');
     }
-    const updatedStudent: Student = {
-      ...currentStudent,
-      currentStatus: 'en_route_delayed',
-      currentZone: 'En camino hacia el plantel',
+    // Persist a separate ETA report; enrollment and attendance remain staff-controlled.
+    await createEtaReport({
+      schoolId: currentStudent.schoolId || currentUser?.schoolId || '',
+      studentId: currentStudent.id,
+      studentName: currentStudent.name,
+      groupId: studentGroup.id,
+      groupName: studentGroup.name,
       etaMinutes: minutes,
-      etaReason: reason,
-      etaSentAt: simulatedTime,
-      lastUpdated: simulatedTime,
-    };
-
-    // Do not claim the ETA was sent unless the database accepts it.
-    // Current Firestore rules intentionally block direct student writes; a
-    // trusted server-side reporting endpoint is required before this is enabled.
-    await syncStudentToCloud(updatedStudent);
-    setStudents((prev) =>
-      prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
-    );
-
-    if (studentOrientador) {
-      pushNotification(
-        'orientador_eta_alert',
-        `Aviso ETA de ${studentGroup.name}: ${currentStudent.name}`,
-        `${currentStudent.name} notificó a Orientación llegada estimada en ~${minutes} min. Motivo: ${reason}. El grupo sabe que no faltará.`,
-        'orientador',
-        {
-          orientadorId: studentOrientador.id,
-          groupId: studentGroup.id,
-          studentId: currentStudent.id,
-        }
-      );
-    }
-
-    if (studentActiveClass) {
-      pushNotification(
-        'teacher_eta_alert',
-        `Reporte de Demora en tu clase: ${currentStudent.name}`,
-        `${currentStudent.name} notificó a ${studentActiveClass.teacherName} llegada estimada en ~${minutes} min (${reason}) para la materia de ${studentActiveClass.subjectName}.`,
-        'teacher',
-        {
-          teacherId: studentActiveClass.teacherId,
-          groupId: studentGroup.id,
-          studentId: currentStudent.id,
-        }
-      );
-    }
+      reason,
+    });
 
   };
 
