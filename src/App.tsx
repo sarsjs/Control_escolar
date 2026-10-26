@@ -675,33 +675,45 @@ export default function App() {
     }
   };
 
-  // 13. Orientador imports students via CSV
-  const handleImportStudentsCsv = (groupId: string, csvData: { name: string; matricula: string }[]) => {
+  // 13. Import students only after Firestore confirms each write.
+  const handleImportStudentsCsv = async (groupId: string, csvData: { name: string; matricula: string }[]) => {
+    const targetGroup = groups.find((group) => group.id === groupId);
+    if (!targetGroup?.schoolId || targetGroup.schoolId !== currentUser?.schoolId) {
+      console.error('Importación cancelada: el grupo no pertenece al plantel de la sesión actual.');
+      return;
+    }
+    if (!csvData.length) return;
+
     const newStudents: Student[] = csvData.map((row, idx) => ({
       id: `stu-csv-${Date.now()}-${idx}`,
-      name: row.name,
-      matricula: row.matricula,
+      name: row.name.trim(),
+      matricula: row.matricula.trim(),
       groupId,
-      ...(groups.find((group) => group.id === groupId)?.schoolId ? { schoolId: groups.find((group) => group.id === groupId)?.schoolId } : currentUser?.schoolId ? { schoolId: currentUser.schoolId } : {}),
+      schoolId: targetGroup.schoolId,
       avatar: '',
       currentStatus: 'outside_school',
       currentZone: 'Sin ubicación registrada',
       distanceToCampusMeters: 0,
       lastUpdated: simulatedTime,
-    }));
+    })).filter((student) => student.name && student.matricula);
 
-    setStudents((prev) => [...prev, ...newStudents]);
-    newStudents.forEach((student) => {
-      void syncStudentToCloud(student).catch((error) => console.error('No se pudo guardar el alumno importado en Firestore:', error));
-    });
-    setGroups((prev) =>
-      prev.map((g) => {
-        if (g.id !== groupId) return g;
-        const updatedGroup = { ...g, studentIds: [...g.studentIds, ...newStudents.map((s) => s.id)] };
-        void syncGroupToCloud(updatedGroup).catch((error) => console.error('No se pudo actualizar la lista del grupo en Firestore:', error));
-        return updatedGroup;
-      })
-    );
+    if (!newStudents.length) return;
+    const updatedGroup = {
+      ...targetGroup,
+      studentIds: [...targetGroup.studentIds, ...newStudents.map((student) => student.id)],
+    };
+
+    try {
+      // Save the roster and its group membership before reflecting success in the UI.
+      for (const student of newStudents) {
+        await syncStudentToCloud(student);
+      }
+      await syncGroupToCloud(updatedGroup);
+      setStudents((prev) => [...prev, ...newStudents]);
+      setGroups((prev) => prev.map((group) => group.id === groupId ? updatedGroup : group));
+    } catch (error) {
+      console.error('La importación no se confirmó en Firestore. Revisa los registros antes de volver a intentarlo:', error);
+    }
   };
 
   // 14. Teacher regenerates PIN
