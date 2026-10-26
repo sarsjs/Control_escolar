@@ -78,6 +78,22 @@ service cloud.firestore {
       allow create, update, delete: if isSuperAdmin();
     }
 
+    function canReadEtaReport(report) {
+      return isSuperAdmin()
+        || (hasProfile() && profile().role == 'student' && profile().linkedEntityId == report.studentId)
+        || (hasProfile() && profile().role == 'director' && profile().schoolId == report.schoolId)
+        || (hasProfile() && profile().role == 'orientador' && profile().schoolId == report.schoolId
+          && exists(/databases/$(database)/documents/groups/$(report.groupId))
+          && (get(/databases/$(database)/documents/groups/$(report.groupId)).data.orientadorId == profile().linkedEntityId
+            || get(/databases/$(database)/documents/groups/$(report.groupId)).data.temporarySubstituteOrientadorId == profile().linkedEntityId))
+        || (hasProfile() && profile().role == 'teacher' && profile().schoolId == report.schoolId
+          && exists(/databases/$(database)/documents/groups/$(report.groupId))
+          && get(/databases/$(database)/documents/groups/$(report.groupId)).data.teacherIds is list
+          && ((profile().linkedEntityId is string
+              && get(/databases/$(database)/documents/groups/$(report.groupId)).data.teacherIds.hasAny([profile().linkedEntityId]))
+            || get(/databases/$(database)/documents/groups/$(report.groupId)).data.teacherIds.hasAny([request.auth.uid])));
+    }
+
     // Every student/group record must carry schoolId to be accessible by school staff.
     match /students/{studentId} {
       allow read: if isSuperAdmin()
@@ -179,11 +195,8 @@ service cloud.firestore {
     // ETA reports are separate from enrollment/attendance. Students may create
     // a bounded report only for their own linked enrollment; reports are immutable.
     match /eta_reports/{reportId} {
-      allow read: if isSuperAdmin()
-        || (resource.data.schoolId is string && canAccessSchool(resource.data.schoolId))
-        || (hasProfile()
-          && profile().role == 'student'
-          && profile().linkedEntityId == resource.data.studentId);
+      // Server-enforced: students see their own reports; staff see only responsible groups.
+      allow read: if canReadEtaReport(resource.data);
 
       allow create: if hasProfile()
         && profile().role == 'student'
