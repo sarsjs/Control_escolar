@@ -101,7 +101,7 @@ export const EtaPromptModal: React.FC<EtaPromptModalProps> = ({
                 Aún no estás presente en tu institución
               </h4>
               <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                Hola, <span className="font-semibold">{studentName}</span>. El sistema detecta que aún no cruzas el acceso escolar. Indica en cuánto tiempo llegas para que tu Orientador y tus profesores sepan que no vas a faltar, sino que vienes en camino.
+                Hola, <span className="font-semibold">{studentName}</span>. Si vas retrasado, indica cuánto tiempo estimas tardar y el motivo. El aviso se compartirá con el personal autorizado de tu grupo. Este formulario no verifica tu ubicación ni registra tu asistencia.
               </p>
             </div>
           </div>
