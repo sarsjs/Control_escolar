@@ -40,7 +40,10 @@ beforeEach(async () => {
       role: "director", schoolId: "school-a", email: "director-a@example.test",
     });
     await setDoc(doc(db, "users", "teacher-a"), {
-      role: "teacher", schoolId: "school-a", email: "teacher-a@example.test",
+      role: "teacher", schoolId: "school-a", linkedEntityId: "teacher-a", email: "teacher-a@example.test",
+    });
+    await setDoc(doc(db, "users", "orientador-a"), {
+      role: "orientador", schoolId: "school-a", linkedEntityId: "orientador-a", email: "orientador-a@example.test",
     });
     await setDoc(doc(db, "users", "director-b"), {
       role: "director", schoolId: "school-b", email: "director-b@example.test",
@@ -56,7 +59,7 @@ beforeEach(async () => {
       schoolId: "school-b", groupId: "group-b", name: "Other Student",
     });
     await setDoc(doc(db, "groups", "group-a"), {
-      schoolId: "school-a", name: "1A",
+      schoolId: "school-a", name: "1A", orientadorId: "orientador-a", teacherIds: ["teacher-a"],
     });
     await setDoc(doc(db, "groups", "group-b"), {
       schoolId: "school-b", name: "1B",
@@ -229,6 +232,28 @@ test("ETA reports are readable only by their student or authorized staff in the 
   await assertSucceeds(getDoc(doc(asUser("student-user"), "eta_reports", "eta-a")));
   await assertSucceeds(getDoc(doc(asUser("teacher-a"), "eta_reports", "eta-a")));
   await assertFails(getDoc(doc(asUser("director-b"), "eta_reports", "eta-a")));
+});
+
+test("ETA reports are limited to the responsible orientador and assigned teacher", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "eta_reports", "eta-a"), {
+      schoolId: "school-a", studentId: "student-a", studentName: "Test Student",
+      groupId: "group-a", groupName: "1A", etaMinutes: 15, reason: "Bus",
+      createdAt: new Date(), status: "pending",
+    });
+    await setDoc(doc(context.firestore(), "eta_reports", "eta-b"), {
+      schoolId: "school-a", studentId: "student-a", studentName: "Test Student",
+      groupId: "group-unassigned", groupName: "Other", etaMinutes: 15, reason: "Bus",
+      createdAt: new Date(), status: "pending",
+    });
+    await setDoc(doc(context.firestore(), "groups", "group-unassigned"), {
+      schoolId: "school-a", name: "Other", orientadorId: "someone-else", teacherIds: ["someone-else"],
+    });
+  });
+  await assertSucceeds(getDoc(doc(asUser("orientador-a"), "eta_reports", "eta-a")));
+  await assertFails(getDoc(doc(asUser("orientador-a"), "eta_reports", "eta-b")));
+  await assertSucceeds(getDoc(doc(asUser("teacher-a"), "eta_reports", "eta-a")));
+  await assertFails(getDoc(doc(asUser("teacher-a"), "eta_reports", "eta-b")));
 });
 
 test("ETA reports cannot be edited or deleted by the student", async () => {
