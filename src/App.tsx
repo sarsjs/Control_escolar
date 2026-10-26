@@ -199,7 +199,6 @@ export default function App() {
     let unsubscribeStudents: (() => void) | undefined;
     let unsubscribeGroups: (() => void) | undefined;
     let unsubscribeStudentGroup: (() => void) | undefined;
-    const unsubscribeEtaReports = subscribeToEtaReports(currentUser.schoolId, isSuperAdmin, currentUser.linkedEntityId, currentUser.role === 'student', setEtaReports);
     const unsubscribeDisputes = subscribeToDisputes(
       currentUser.schoolId,
       isSuperAdmin,
@@ -246,9 +245,34 @@ export default function App() {
       unsubscribeStudentGroup?.();
       unsubscribeSchools();
       unsubscribeDisputes();
-      unsubscribeEtaReports();
     };
   }, [currentUser?.id]);
+
+  // ETA listeners are scoped to each responsible group; UI filtering alone is not security.
+  useEffect(() => {
+    if (!currentUser) {
+      setEtaReports([]);
+      return;
+    }
+    const assignedGroupIds = groups.filter((group) => {
+      if (currentUser.role === 'orientador') {
+        return group.orientadorId === currentUser.linkedEntityId
+          || group.temporarySubstituteOrientadorId === currentUser.linkedEntityId;
+      }
+      if (currentUser.role === 'teacher') {
+        return group.schedule.some((slot) => slot.teacherId === currentUser.linkedEntityId);
+      }
+      return false;
+    }).map((group) => group.id);
+    return subscribeToEtaReports(
+      currentUser.schoolId,
+      currentUser.role === 'superadmin',
+      currentUser.linkedEntityId,
+      currentUser.role,
+      assignedGroupIds,
+      setEtaReports
+    );
+  }, [currentUser?.id, currentUser?.role, currentUser?.schoolId, currentUser?.linkedEntityId, groups]);
 
   // Helper for notification broadcast
   const pushNotification = (
