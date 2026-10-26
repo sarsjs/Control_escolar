@@ -79,23 +79,25 @@ app.post('/api/admin/provision-director', async (req, res) => {
       createdUid = authUser.uid;
     }
 
-    try {
-      await adminDb.collection('users').doc(authUser.uid).set({
-        uid: authUser.uid,
-        email,
-        username: email,
-        name,
-        title: 'Director',
-        role: 'director',
-        schoolId,
-        status: 'pending_password_setup',
-        emailVerified: false,
-        createdAt: new Date().toISOString(),
-        createdBy: decoded.uid
-      }, { merge: true });
-    } catch (error) {
-      if (createdUid) await adminAuth.deleteUser(createdUid).catch(() => {});
-      throw error;
+    if (!alreadyProvisioned) {
+      try {
+        await adminDb.collection('users').doc(authUser.uid).set({
+          uid: authUser.uid,
+          email,
+          username: email,
+          name,
+          title: 'Director',
+          role: 'director',
+          schoolId,
+          status: 'pending_password_setup',
+          emailVerified: false,
+          createdAt: new Date().toISOString(),
+          createdBy: decoded.uid
+        });
+      } catch (error) {
+        if (createdUid) await adminAuth.deleteUser(createdUid).catch(() => {});
+        throw error;
+      }
     }
 
     return res.status(200).json({
