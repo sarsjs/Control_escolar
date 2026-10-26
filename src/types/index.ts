@@ -160,6 +160,19 @@ export interface Teacher {
   assignedGroupIds: string[];
 }
 
+export interface EtaReport {
+  id: string;
+  schoolId: string;
+  studentId: string;
+  studentName: string;
+  groupId: string;
+  groupName: string;
+  etaMinutes: number;
+  reason: string;
+  createdAt: string;
+  status: 'pending';
+}
+
 export interface SystemNotification {
   id: string;
   type:
