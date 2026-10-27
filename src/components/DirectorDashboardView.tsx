@@ -45,6 +45,10 @@ interface DirectorDashboardViewProps {
     reason: string
   ) => void;
   onResolveDispute: (disputeId: string, approved: boolean, notes: string) => void;
+  onSaveOrientador: (input: { id?: string; name: string; email: string; phone: string; cubicle: string }) => Promise<void>;
+  onSaveTeacher: (input: { id?: string; name: string; email: string; specialty: string }) => Promise<void>;
+  onSaveStudent: (input: { id?: string; name: string; matricula: string; groupId: string }) => Promise<void>;
+  onSetRosterActive: (kind: 'orientador' | 'teacher' | 'student', id: string, active: boolean) => Promise<void>;
 }
 
 export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
@@ -61,8 +65,12 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
   onCreateNewGroup,
   onDirectorCorrectAttendance,
   onResolveDispute,
+  onSaveOrientador,
+  onSaveTeacher,
+  onSaveStudent,
+  onSetRosterActive,
 }) => {
-  const [activeTab, setActiveTab] = useState<'matrix' | 'audit' | 'groups' | 'disputes'>('matrix');
+  const [activeTab, setActiveTab] = useState<'matrix' | 'audit' | 'groups' | 'disputes' | 'people'>('matrix');
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [groupCreateError, setGroupCreateError] = useState<string>('');
 
@@ -226,6 +234,13 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
           <div className="flex items-center gap-2 py-2">
             <button
               type="button"
+              onClick={() => setActiveTab('people')}
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${activeTab === 'people' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              Personal y Alumnos
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('matrix')}
               className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
                 activeTab === 'matrix' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
@@ -262,6 +277,19 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
             </button>
           </div>
         </div>
+
+        {activeTab === 'people' && (
+          <DirectorPeopleManagement
+            orientadores={orientadores}
+            teachers={teachers}
+            students={students}
+            groups={groups}
+            onSaveOrientador={onSaveOrientador}
+            onSaveTeacher={onSaveTeacher}
+            onSaveStudent={onSaveStudent}
+            onSetRosterActive={onSetRosterActive}
+          />
+        )}
 
         {/* TAB 1: MATRIZ DE REPARTO Y SUSTITUCIONES */}
         {activeTab === 'matrix' && (
