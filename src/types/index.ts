@@ -109,6 +109,7 @@ export interface Student {
   validatedVia?: ValidationMethod | null;
   validatedAt?: string;
   bleDeviceId?: string; // Optional registered Bluetooth hardware identifier
+  active?: boolean; // Soft deactivation preserves enrollment and attendance history
 }
 
 export interface GroupScheduleItem {
@@ -149,6 +150,7 @@ export interface Orientador {
   phone: string;
   cubicle: string;
   assignedGroupIds: string[];
+  active?: boolean;
 }
 
 export interface Teacher {
@@ -158,6 +160,7 @@ export interface Teacher {
   avatar: string;
   specialty: string;
   assignedGroupIds: string[];
+  active?: boolean;
 }
 
 export interface EtaReport {
