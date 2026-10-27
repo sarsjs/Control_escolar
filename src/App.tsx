@@ -788,6 +788,29 @@ export default function App() {
     }
   };
 
+  const handleToggleSchoolStatus = async (school: SchoolInstitution) => {
+    const updatedSchool: SchoolInstitution = {
+      ...school,
+      status: school.status === 'suspended' ? 'active' : 'suspended',
+    };
+    try {
+      await syncSchoolToCloud(updatedSchool);
+      setSchools((prev) => prev.map((item) => item.id === school.id ? updatedSchool : item));
+      if (currentSchool?.id === school.id) setCurrentSchool(updatedSchool);
+      pushNotification(
+        'info',
+        updatedSchool.status === 'suspended' ? 'Plantel desactivado' : 'Plantel reactivado',
+        updatedSchool.status === 'suspended'
+          ? `${school.name} quedó suspendido. Sus registros se conservaron.`
+          : `${school.name} volvió a marcarse como activo.`,
+        'superadmin'
+      );
+    } catch (error) {
+      console.error('No se pudo cambiar el estado del plantel en Firestore:', error);
+      window.alert('No se pudo guardar el cambio de estado. El plantel no se modificó; revisa la conexión y vuelve a intentarlo.');
+    }
+  };
+
   if (!currentUser) {
     return <LoginView onLoginSuccess={(u) => setCurrentUser(u)} />;
   }
@@ -902,6 +925,7 @@ export default function App() {
             schools={schools}
             onAddSchool={handleAddSchool}
             onUpdateSchool={handleUpdateSchool}
+            onToggleSchoolStatus={handleToggleSchoolStatus}
           />
         )}
 
