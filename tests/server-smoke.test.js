@@ -11,7 +11,7 @@ await new Promise((resolve, reject) => {
 const { port } = portServer.address();
 await new Promise((resolve, reject) => portServer.close(error => error ? reject(error) : resolve()));
 
-const child = spawn(process.execPath, ['server.js'], {
+const child = spawn('node', ['server.js'], {
   env: { ...process.env, PORT: String(port) },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -53,7 +53,7 @@ try {
     body: JSON.stringify({ role: 'teacher', schoolId: 'test-school', linkedEntityId: 'test-user', email: 'teacher@example.com', name: 'Test Teacher' }),
   });
   assert.equal(invalidSessionResponse.status, 401, 'Invalid bearer tokens must be rejected as unauthenticated.');
-  console.log('Server smoke test passed: /healthz and SPA root returned HTTP 200; invalid Firebase sessions returned HTTP 401.');
+  console.log('Server smoke test passed: Node.js server returned HTTP 200 for /healthz and SPA root, and rejected invalid Firebase sessions with HTTP 401.');
 } finally {
   child.kill('SIGTERM');
   await Promise.race([
