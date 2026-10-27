@@ -109,11 +109,20 @@ export default function App() {
         }
 
         const role = profile.role as UserRole;
+        const schoolId = typeof profile.schoolId === 'string' ? profile.schoolId : undefined;
+        if (role !== 'superadmin' && schoolId) {
+          const schoolSnapshot = await getDoc(doc(db, 'schools', schoolId));
+          if (schoolSnapshot.exists() && schoolSnapshot.data().status === 'suspended') {
+            await signOut(auth);
+            if (active) setCurrentUser(null);
+            return;
+          }
+        }
+
         const profileName = typeof profile.name === 'string'
           ? profile.name
           : (firebaseUser.displayName || firebaseUser.email || 'Usuario');
         const profileAvatar = typeof profile.avatar === 'string' ? profile.avatar : '';
-        const schoolId = typeof profile.schoolId === 'string' ? profile.schoolId : undefined;
         const linkedEntityId = typeof profile.linkedEntityId === 'string' ? profile.linkedEntityId : undefined;
 
         if (active) {
