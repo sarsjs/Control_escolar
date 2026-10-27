@@ -758,11 +758,15 @@ export default function App() {
 
   // 13. Import students only after Firestore confirms each write.
   const handleImportStudentsCsv = async (groupId: string, csvData: { name: string; matricula: string }[]) => {
-    if (currentUser?.role !== 'director' || !currentUser.schoolId) {
-      throw new Error('Solo dirección con plantel asignado puede importar alumnos.');
+    if (!currentUser?.schoolId || !['director', 'orientador'].includes(currentUser.role)) {
+      throw new Error('Solo dirección u orientación con plantel asignado puede importar alumnos.');
     }
     const targetGroup = groups.find((group) => group.id === groupId && group.schoolId === currentUser.schoolId && group.active !== false);
     if (!targetGroup) throw new Error('El grupo destino no está activo o no pertenece a este plantel.');
+    if (currentUser.role === 'orientador' && targetGroup.orientadorId !== currentOrientadorEntity?.id &&
+        !currentOrientadorEntity?.assignedGroupIds?.includes(groupId)) {
+      throw new Error('Solo puedes importar alumnos a un grupo asignado a tu cuenta de orientación.');
+    }
     if (!csvData.length) throw new Error('El archivo no contiene alumnos válidos.');
 
     const existingMatriculas = new Set(students
