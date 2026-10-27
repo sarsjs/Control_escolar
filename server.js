@@ -63,6 +63,9 @@ app.post('/api/admin/provision-account', async (req, res) => {
 
     const schoolSnap = await adminDb.collection('schools').doc(schoolId).get();
     if (!schoolSnap.exists) return res.status(404).json({ error: 'No se encontró el plantel.' });
+    if (schoolSnap.data()?.status === 'suspended') {
+      return res.status(403).json({ error: 'El plantel está suspendido y no puede recibir nuevas cuentas.' });
+    }
 
     if (role === 'director') {
       const school = schoolSnap.data();
