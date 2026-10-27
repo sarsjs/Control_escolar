@@ -10,7 +10,7 @@ interface Props {
 const inputClass = 'block w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm';
 
 function parseCsv(text: string): { rows: { name: string; matricula: string }[]; errors: string[] } {
-  const lines = text.replace(/^\\uFEFF/, '').split(/\\r?\\n/).filter((line) => line.trim());
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) return { rows: [], errors: ['El archivo debe incluir encabezados y al menos un alumno.'] };
   const split = (line: string) => {
     const cells: string[] = [];
@@ -19,13 +19,13 @@ function parseCsv(text: string): { rows: { name: string; matricula: string }[]; 
       const ch = line[i];
       if (ch === '"' && quoted && line[i + 1] === '"') { value += '"'; i++; }
       else if (ch === '"') quoted = !quoted;
-      else if ((ch === ',' || ch === ';' || ch === '\\t') && !quoted) { cells.push(value.trim()); value = ''; }
+      else if ((ch === ',' || ch === ';' || ch === '\t') && !quoted) { cells.push(value.trim()); value = ''; }
       else value += ch;
     }
     cells.push(value.trim());
     return cells;
   };
-  const header = split(lines[0]).map((cell) => cell.toLocaleLowerCase('es-MX').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9]/g, ''));
+  const header = split(lines[0]).map((cell) => cell.toLocaleLowerCase('es-MX').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, ''));
   const nameIndex = header.findIndex((h) => ['nombre', 'nombres', 'nombrecompleto', 'alumno', 'name'].includes(h));
   const matriculaIndex = header.findIndex((h) => ['matricula', 'matriculas', 'numeroempleado', 'id'].includes(h));
   if (nameIndex < 0 || matriculaIndex < 0) return { rows: [], errors: ['No encuentro las columnas Nombre y Matrícula. Usa encabezados: Nombre,Matrícula.'] };
@@ -62,7 +62,7 @@ export const DirectorStudentCsvImport: React.FC<Props> = ({ groups, existingStud
     setRows([]);
     setFileName('');
     if (!file) return;
-    if (!/\\.csv$/i.test(file.name) && file.type !== 'text/csv' && file.type !== 'application/vnd.ms-excel') {
+    if (!/\.csv$/i.test(file.name) && file.type !== 'text/csv' && file.type !== 'application/vnd.ms-excel') {
       setErrors(['Por ahora se acepta CSV exportado desde Excel; los archivos .xlsx no se procesan directamente.']);
       return;
     }
