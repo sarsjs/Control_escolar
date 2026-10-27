@@ -86,6 +86,23 @@ export async function syncStudentToCloud(student: Student) {
   await setDoc(doc(db, 'students', student.id), student, { merge: true });
 }
 
+/** Atomically import a roster and update its destination group in one Firestore batch. */
+export async function syncStudentsAndGroupToCloud(students: Student[], group: SchoolGroup) {
+  if (students.length > 450) throw new Error('Importa máximo 450 alumnos por archivo para mantener la operación atómica.');
+  const batch = writeBatch(db);
+  for (const student of students) {
+    if (!student.schoolId || student.schoolId !== group.schoolId || student.groupId !== group.id) {
+      throw new Error('Los alumnos importados deben pertenecer al mismo plantel y grupo destino.');
+    }
+    batch.set(doc(db, 'students', student.id), student, { merge: true });
+  }
+  batch.set(doc(db, 'groups', group.id), {
+    ...group,
+    teacherIds: [...new Set(group.schedule.map((slot) => slot.teacherId).filter(Boolean))]
+  }, { merge: true });
+  await batch.commit();
+}
+
 /** Atomically save an attendance correction and its immutable audit record. */
 export async function syncAttendanceCorrectionToCloud(student: Student, entry: AuditLogEntry) {
   if (!student.schoolId || entry.schoolId !== student.schoolId || !entry.modifiedById) {
