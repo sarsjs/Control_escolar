@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { provisionSchoolAccount } from './utils/accountProvisioning';
 import {
   UserAccount,
   UserRole,
@@ -546,6 +547,32 @@ export default function App() {
 
 
   // Director roster management: persist first, then reflect the confirmed change locally.
+  const handleProvisionAccount = async (kind: 'orientador' | 'teacher' | 'student', id: string) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) {
+      throw new Error('Solo dirección con plantel asignado puede crear accesos.');
+    }
+    if (kind === 'student') {
+      const student = students.find((item) => item.id === id && item.schoolId === currentUser.schoolId);
+      const email = student && 'email' in student && typeof student.email === 'string' ? student.email.trim() : '';
+      if (!student || !email) throw new Error('Este alumno no tiene correo registrado. Primero se debe definir su método de acceso.');
+      await provisionSchoolAccount({ role: 'student', schoolId: currentUser.schoolId, linkedEntityId: student.id, email, name: student.name });
+      return;
+    }
+    const entity = kind === 'orientador'
+      ? orientadores.find((item) => item.id === id && item.schoolId === currentUser.schoolId)
+      : teachers.find((item) => item.id === id && item.schoolId === currentUser.schoolId);
+    if (!entity || entity.active === false || !entity.email?.trim()) {
+      throw new Error('La ficha debe estar activa y tener un correo válido.');
+    }
+    await provisionSchoolAccount({
+      role: kind,
+      schoolId: currentUser.schoolId,
+      linkedEntityId: entity.id,
+      email: entity.email.trim(),
+      name: entity.name.trim(),
+    });
+  };
+
   const handleSaveOrientador = async (input: { id?: string; name: string; email: string; phone: string; cubicle: string }) => {
     if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
     const id = input.id || `ori-${Date.now()}`;
@@ -1007,6 +1034,7 @@ export default function App() {
             onSaveStudent={handleSaveStudent}
             onSetRosterActive={handleSetRosterActive}
             onImportStudentsCsv={handleImportStudentsCsv}
+            onProvisionAccount={handleProvisionAccount}
             onUpdateDirectorGroup={handleUpdateDirectorGroup}
           />
         )}
