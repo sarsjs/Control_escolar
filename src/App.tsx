@@ -233,6 +233,8 @@ export default function App() {
       });
     } else {
       if (currentUser.role === 'director') {
+        setOrientadores([]);
+        setTeachers([]);
         unsubscribeOrientadores = subscribeToOrientadores(currentUser.schoolId, (items) => setOrientadores(items));
         unsubscribeTeachers = subscribeToTeachers(currentUser.schoolId, (items) => setTeachers(items));
       }
