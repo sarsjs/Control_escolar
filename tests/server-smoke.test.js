@@ -38,7 +38,17 @@ try {
   assert.ok(response, `Server did not become ready. Last error: ${lastError}. Output: ${logs}`);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true, service: 'aulacontrol' });
-  console.log('Server smoke test passed: /healthz returned HTTP 200.');
+
+  const invalidSessionResponse = await fetch(`http://127.0.0.1:${port}/api/admin/provision-account`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: 'Bearer definitely-not-a-valid-firebase-token',
+    },
+    body: JSON.stringify({ role: 'teacher', schoolId: 'test-school', linkedEntityId: 'test-user', email: 'teacher@example.com', name: 'Test Teacher' }),
+  });
+  assert.equal(invalidSessionResponse.status, 401, 'Invalid bearer tokens must be rejected as unauthenticated.');
+  console.log('Server smoke test passed: /healthz returned HTTP 200 and invalid Firebase sessions returned HTTP 401.');
 } finally {
   child.kill('SIGTERM');
   await Promise.race([
