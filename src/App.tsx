@@ -34,6 +34,7 @@ import { Cloud, CloudCheck } from 'lucide-react';
 import {
   testFirestoreConnection,
   syncStudentToCloud,
+  syncStudentsAndGroupToCloud,
   syncAttendanceCorrectionToCloud,
   recordDisputeToCloud,
   resolveDisputeToCloud,
@@ -768,6 +769,7 @@ export default function App() {
       throw new Error('Solo puedes importar alumnos a un grupo asignado a tu cuenta de orientación.');
     }
     if (!csvData.length) throw new Error('El archivo no contiene alumnos válidos.');
+    if (csvData.length > 450) throw new Error('Importa máximo 450 alumnos por archivo. Divide la lista en archivos más pequeños.');
 
     const existingMatriculas = new Set(students
       .filter((student) => student.schoolId === currentUser.schoolId)
@@ -801,13 +803,12 @@ export default function App() {
       studentIds: [...new Set([...targetGroup.studentIds, ...newStudents.map((student) => student.id)])],
     };
 
-    // Persist all student documents first and the updated group last. Do not report success on failure.
+    // Commit every student and the destination group atomically; no partial roster on failure.
     try {
-      for (const student of newStudents) await syncStudentToCloud(student);
-      await syncGroupToCloud(updatedGroup);
+      await syncStudentsAndGroupToCloud(newStudents, updatedGroup);
     } catch (error) {
-      console.error('La importación no se confirmó en Firestore. Revisa los registros antes de volver a intentarlo:', error);
-      throw new Error('No se pudo completar la importación en Firestore. Revisa la lista antes de volver a intentarlo.');
+      console.error('La importación no se confirmó en Firestore:', error);
+      throw new Error('No se pudo completar la importación. No se confirmó ningún cambio del lote; revisa los permisos de Firestore.');
     }
     setStudents((prev) => [...prev, ...newStudents]);
     setGroups((prev) => prev.map((group) => group.id === groupId ? updatedGroup : group));
