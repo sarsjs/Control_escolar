@@ -631,6 +631,24 @@ export default function App() {
     );
   };
 
+
+  const handleUpdateDirectorGroup = async (input: { id: string; name: string; semester: number; turn: 'Matutino' | 'Vespertino'; orientadorId: string; active: boolean }) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Solo dirección con plantel asignado puede modificar grupos.');
+    const existing = groups.find((group) => group.id === input.id && group.schoolId === currentUser.schoolId);
+    if (!existing) throw new Error('No se encontró el grupo de este plantel.');
+    if (!input.name.trim()) throw new Error('El nombre del grupo es obligatorio.');
+    if (input.orientadorId && !orientadores.some((item) => item.id === input.orientadorId && item.active !== false)) throw new Error('Selecciona un orientador activo de este plantel.');
+    const updated: SchoolGroup = { ...existing, name: input.name.trim(), semester: input.semester, turn: input.turn, orientadorId: input.orientadorId, active: input.active };
+    await syncGroupToCloud(updated);
+    setGroups((prev) => prev.map((group) => group.id === updated.id ? updated : group));
+    setOrientadores((prev) => prev.map((item) => {
+      const ids = new Set(item.assignedGroupIds || []);
+      if (item.id === existing.orientadorId) ids.delete(existing.id);
+      if (item.id === updated.orientadorId) ids.add(updated.id);
+      return { ...item, assignedGroupIds: [...ids] };
+    }));
+  };
+
   // 10. Director creates new group
   const handleCreateNewGroup = async (name: string, semester: number, orientadorId: string) => {
     if (!currentUser || !['director', 'superadmin'].includes(currentUser.role) || !currentUser.schoolId) {
@@ -962,6 +980,7 @@ export default function App() {
             onSaveTeacher={handleSaveTeacher}
             onSaveStudent={handleSaveStudent}
             onSetRosterActive={handleSetRosterActive}
+            onUpdateDirectorGroup={handleUpdateDirectorGroup}
           />
         )}
 
