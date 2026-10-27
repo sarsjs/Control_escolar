@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { DirectorStudentCsvImport } from './DirectorStudentCsvImport';
 import { Orientador, Teacher, Student, SchoolGroup } from '../types';
 
 type PersonTab = 'orientadores' | 'docentes' | 'alumnos';
@@ -11,13 +12,14 @@ interface Props {
   onSaveTeacher: (input: { id?: string; name: string; email: string; specialty: string }) => Promise<void>;
   onSaveStudent: (input: { id?: string; name: string; matricula: string; groupId: string }) => Promise<void>;
   onSetRosterActive: (kind: 'orientador' | 'teacher' | 'student', id: string, active: boolean) => Promise<void>;
+  onImportStudentsCsv: (groupId: string, rows: { name: string; matricula: string }[]) => Promise<void>;
 }
 
 const fieldClass = 'w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100';
 const buttonClass = 'rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50';
 const secondaryClass = 'rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50';
 
-export const DirectorPeopleManagement: React.FC<Props> = ({ orientadores, teachers, students, groups, onSaveOrientador, onSaveTeacher, onSaveStudent, onSetRosterActive }) => {
+export const DirectorPeopleManagement: React.FC<Props> = ({ orientadores, teachers, students, groups, onSaveOrientador, onSaveTeacher, onSaveStudent, onSetRosterActive, onImportStudentsCsv }) => {
   const [tab, setTab] = useState<PersonTab>('orientadores');
   const [editingId, setEditingId] = useState<string>();
   const [name, setName] = useState('');
@@ -77,6 +79,7 @@ export const DirectorPeopleManagement: React.FC<Props> = ({ orientadores, teache
         {tabButton('docentes', 'Docentes', teachers.length)}
         {tabButton('alumnos', 'Alumnos', students.length)}
       </div>
+      {tab === 'alumnos' && <DirectorStudentCsvImport groups={activeGroups.filter((group) => group.active !== false)} existingStudents={students} onImport={onImportStudentsCsv} />}
       {message && <p role="status" className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>}
       {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       <div className="grid gap-5 lg:grid-cols-[minmax(260px,0.85fr)_minmax(0,1.4fr)]">
