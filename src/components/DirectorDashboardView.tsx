@@ -50,6 +50,7 @@ interface DirectorDashboardViewProps {
   onSaveTeacher: (input: { id?: string; name: string; email: string; specialty: string }) => Promise<void>;
   onSaveStudent: (input: { id?: string; name: string; matricula: string; groupId: string }) => Promise<void>;
   onSetRosterActive: (kind: 'orientador' | 'teacher' | 'student', id: string, active: boolean) => Promise<void>;
+  onImportStudentsCsv: (groupId: string, rows: { name: string; matricula: string }[]) => Promise<void>;
   onUpdateDirectorGroup: (input: { id: string; name: string; semester: number; turn: 'Matutino' | 'Vespertino'; orientadorId: string; active: boolean }) => Promise<void>;
 }
 
@@ -71,6 +72,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
   onSaveTeacher,
   onSaveStudent,
   onSetRosterActive,
+  onImportStudentsCsv,
   onUpdateDirectorGroup,
 }) => {
   const [activeTab, setActiveTab] = useState<'matrix' | 'audit' | 'attendance' | 'groups' | 'disputes' | 'people'>('matrix');
@@ -300,6 +302,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
             onSaveTeacher={onSaveTeacher}
             onSaveStudent={onSaveStudent}
             onSetRosterActive={onSetRosterActive}
+            onImportStudentsCsv={onImportStudentsCsv}
           />
         )}
 
