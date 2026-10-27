@@ -140,6 +140,7 @@ export interface SchoolGroup {
   temporarySubstituteOrientadorId?: string; // Sustitución autorizada por Director
   studentIds: string[];
   schedule: GroupScheduleItem[];
+  active?: boolean; // Soft archive; preserves attendance and enrollment history
 }
 
 export interface Orientador {
