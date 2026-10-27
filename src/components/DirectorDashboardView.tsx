@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DirectorPeopleManagement } from './DirectorPeopleManagement';
 import {
   Orientador,
   SchoolGroup,
