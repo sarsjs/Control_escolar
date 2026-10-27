@@ -758,43 +758,55 @@ export default function App() {
 
   // 13. Import students only after Firestore confirms each write.
   const handleImportStudentsCsv = async (groupId: string, csvData: { name: string; matricula: string }[]) => {
-    const targetGroup = groups.find((group) => group.id === groupId);
-    if (!targetGroup?.schoolId || targetGroup.schoolId !== currentUser?.schoolId) {
-      console.error('Importación cancelada: el grupo no pertenece al plantel de la sesión actual.');
-      return;
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) {
+      throw new Error('Solo dirección con plantel asignado puede importar alumnos.');
     }
-    if (!csvData.length) return;
+    const targetGroup = groups.find((group) => group.id === groupId && group.schoolId === currentUser.schoolId && group.active !== false);
+    if (!targetGroup) throw new Error('El grupo destino no está activo o no pertenece a este plantel.');
+    if (!csvData.length) throw new Error('El archivo no contiene alumnos válidos.');
 
-    const newStudents: Student[] = csvData.map((row, idx): Student => ({
-      id: `stu-csv-${Date.now()}-${idx}`,
-      name: row.name.trim(),
-      matricula: row.matricula.trim(),
+    const existingMatriculas = new Set(students
+      .filter((student) => student.schoolId === currentUser.schoolId)
+      .map((student) => student.matricula.trim().toLocaleLowerCase('es-MX')));
+    const seen = new Set<string>();
+    const cleanRows = csvData.map((row) => ({ name: row.name.trim(), matricula: row.matricula.trim() }));
+    for (const row of cleanRows) {
+      const key = row.matricula.toLocaleLowerCase('es-MX');
+      if (!row.name || !row.matricula) throw new Error('Cada fila debe tener nombre y matrícula.');
+      if (seen.has(key)) throw new Error('El archivo contiene matrículas repetidas.');
+      if (existingMatriculas.has(key)) throw new Error('La matrícula ' + row.matricula + ' ya está registrada en el plantel.');
+      seen.add(key);
+    }
+
+    const batchId = Date.now();
+    const newStudents: Student[] = cleanRows.map((row, idx): Student => ({
+      id: `stu-csv-${batchId}-${idx}`,
+      name: row.name,
+      matricula: row.matricula,
       groupId,
       schoolId: targetGroup.schoolId as string,
       avatar: '',
       currentStatus: 'outside_school',
       currentZone: 'Sin ubicación registrada',
       distanceToCampusMeters: 0,
-      lastUpdated: simulatedTime,
-    })).filter((student) => student.name && student.matricula);
-
-    if (!newStudents.length) return;
+      lastUpdated: new Date().toISOString(),
+      active: true,
+    }));
     const updatedGroup = {
       ...targetGroup,
-      studentIds: [...targetGroup.studentIds, ...newStudents.map((student) => student.id)],
+      studentIds: [...new Set([...targetGroup.studentIds, ...newStudents.map((student) => student.id)])],
     };
 
+    // Persist all student documents first and the updated group last. Do not report success on failure.
     try {
-      // Save the roster and its group membership before reflecting success in the UI.
-      for (const student of newStudents) {
-        await syncStudentToCloud(student);
-      }
+      for (const student of newStudents) await syncStudentToCloud(student);
       await syncGroupToCloud(updatedGroup);
-      setStudents((prev) => [...prev, ...newStudents]);
-      setGroups((prev) => prev.map((group) => group.id === groupId ? updatedGroup : group));
     } catch (error) {
       console.error('La importación no se confirmó en Firestore. Revisa los registros antes de volver a intentarlo:', error);
+      throw new Error('No se pudo completar la importación en Firestore. Revisa la lista antes de volver a intentarlo.');
     }
+    setStudents((prev) => [...prev, ...newStudents]);
+    setGroups((prev) => prev.map((group) => group.id === groupId ? updatedGroup : group));
   };
 
   // 15. Teacher manual validate with audit
