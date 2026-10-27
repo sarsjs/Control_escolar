@@ -992,6 +992,7 @@ export default function App() {
             onSaveTeacher={handleSaveTeacher}
             onSaveStudent={handleSaveStudent}
             onSetRosterActive={handleSetRosterActive}
+            onImportStudentsCsv={handleImportStudentsCsv}
             onUpdateDirectorGroup={handleUpdateDirectorGroup}
           />
         )}
