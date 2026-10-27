@@ -145,6 +145,7 @@ export interface SchoolGroup {
 
 export interface Orientador {
   id: string;
+  schoolId?: string;
   name: string;
   email: string;
   avatar: string;
@@ -156,6 +157,7 @@ export interface Orientador {
 
 export interface Teacher {
   id: string;
+  schoolId?: string;
   name: string;
   email: string;
   avatar: string;
