@@ -28,11 +28,15 @@ const entityCollections = {
   student: 'students',
 };
 
+app.get('/healthz', (_req, res) => {
+  res.status(200).json({ ok: true, service: 'aulacontrol' });
+});
+
 app.post('/api/admin/provision-account', async (req, res) => {
   let createdUid;
   try {
     const authorization = req.get('authorization') || '';
-    const match = authorization.match(/^Bearer\s+(.+)$/i);
+    const match = authorization.match(/^Bearer\\s+(.+)$/i);
     if (!match) return res.status(401).json({ error: 'Se requiere una sesión autenticada.' });
 
     const decoded = await adminAuth.verifyIdToken(match[1]);
@@ -51,7 +55,7 @@ app.post('/api/admin/provision-account', async (req, res) => {
     const linkedEntityId = typeof req.body?.linkedEntityId === 'string' ? req.body.linkedEntityId.trim() : '';
 
     if (!validRoles.has(role)) return res.status(400).json({ error: 'Rol de cuenta no válido.' });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) {
       return res.status(400).json({ error: 'Correo electrónico no válido.' });
     }
     if (!name || name.length > 160 || !/^[A-Za-z0-9_-]{1,128}$/.test(schoolId)) {
