@@ -43,6 +43,7 @@ function parseCsv(text: string): { rows: { name: string; matricula: string }[]; 
     seen.add(key);
     rows.push({ name, matricula });
   });
+  if (rows.length > 450) errors.push('El archivo contiene más de 450 alumnos. Divide la lista en archivos más pequeños.');
   return { rows, errors };
 }
 
@@ -94,7 +95,7 @@ export const DirectorStudentCsvImport: React.FC<Props> = ({ groups, existingStud
   };
 
   return <section className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
-    <div><h4 className="font-bold text-slate-900">Importación de alumnos por CSV</h4><p className="mt-1 text-xs leading-relaxed text-slate-600">Exporta tu hoja de Excel como CSV UTF-8. Columnas requeridas: <strong>Nombre</strong> y <strong>Matrícula</strong>. No crea cuentas ni contraseñas.</p></div>
+    <div><h4 className="font-bold text-slate-900">Importación de alumnos por CSV</h4><p className="mt-1 text-xs leading-relaxed text-slate-600">Exporta tu hoja de Excel como CSV UTF-8. Columnas requeridas: <strong>Nombre</strong> y <strong>Matrícula</strong>. Máximo 450 alumnos por archivo. No crea cuentas ni contraseñas.</p></div>
     <label className="block text-xs font-semibold text-slate-600">Grupo destino<select className={inputClass + ' mt-1 bg-white'} value={groupId} onChange={(e) => { setGroupId(e.target.value); setNotice(''); }}><option value="">Seleccionar grupo</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name} · {group.semester}° · {group.turn}</option>)}</select></label>
     <label className="block text-xs font-semibold text-slate-600">Archivo CSV<input className={inputClass + ' mt-1 bg-white'} type="file" accept=".csv,text/csv" onChange={(e) => void loadFile(e.target.files?.[0])} /></label>
     {fileName && <p className="text-xs text-slate-500">Archivo: {fileName} · {rows.length} fila(s) válidas · {groupStudents.length} alumno(s) en el grupo destino.</p>}
