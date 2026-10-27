@@ -441,7 +441,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
         )}
 
         {/* TAB 2: SUPERVISIÓN Y CORRECCIÓN DE ASISTENCIAS */}
-        {activeTab === 'groups' && (
+        {activeTab === 'attendance' && (
           <div className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
