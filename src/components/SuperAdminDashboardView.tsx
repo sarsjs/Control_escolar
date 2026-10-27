@@ -20,6 +20,7 @@ import {
   Globe,
   Radio,
   Users,
+  Mail,
 } from 'lucide-react';
 
 interface SuperAdminDashboardViewProps {
@@ -28,6 +29,7 @@ interface SuperAdminDashboardViewProps {
   onAddSchool: (school: SchoolInstitution) => void;
   onUpdateSchool: (school: SchoolInstitution) => void;
   onToggleSchoolStatus: (school: SchoolInstitution) => void;
+  onProvisionDirector: (school: SchoolInstitution) => Promise<void>;
 }
 
 export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = ({
@@ -36,11 +38,13 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
   onAddSchool,
   onUpdateSchool,
   onToggleSchoolStatus,
+  onProvisionDirector,
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'trial' | 'suspended'>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [editingSchool, setEditingSchool] = useState<SchoolInstitution | null>(null);
+  const [invitingSchoolId, setInvitingSchoolId] = useState<string | null>(null);
 
   // Form state for creating new school
   const [formName, setFormName] = useState<string>('');
@@ -403,7 +407,25 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                 Alumnos: <strong className="text-slate-800">{school.enrolledStudentsCount}</strong> / {school.maxStudents}
               </span>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={invitingSchoolId === school.id}
+                  onClick={async () => {
+                    setInvitingSchoolId(school.id);
+                    try {
+                      await onProvisionDirector(school);
+                    } finally {
+                      setInvitingSchoolId(null);
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-semibold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                  title="Crear o verificar la cuenta y enviar instrucciones de contraseña"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>{invitingSchoolId === school.id ? 'Enviando…' : 'Invitar / reenviar director'}</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setEditingSchool(school)}
@@ -429,7 +451,6 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                   <Lock className="w-3.5 h-3.5" />
                   <span>{school.status === 'suspended' ? 'Reactivar' : 'Desactivar'}</span>
                 </button>
-
               </div>
             </div>
           </div>
