@@ -566,11 +566,20 @@ export default function App() {
 
   const handleSaveStudent = async (input: { id?: string; name: string; matricula: string; groupId: string }) => {
     if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
-    const group = groups.find((item) => item.id === input.groupId && item.schoolId === currentUser.schoolId);
-    if (!group) throw new Error('Selecciona un grupo de este plantel.');
+    const group = groups.find((item) => item.id === input.groupId && item.schoolId === currentUser.schoolId && item.active !== false);
+    if (!group) throw new Error('Selecciona un grupo activo de este plantel.');
+    const name = input.name.trim();
+    const matricula = input.matricula.trim();
+    if (!name || !matricula) throw new Error('El nombre y la matrícula son obligatorios.');
     const id = input.id || `stu-${Date.now()}`;
+    const duplicateMatricula = students.find((item) =>
+      item.schoolId === currentUser.schoolId
+      && item.id !== id
+      && item.matricula.trim().toLocaleLowerCase('es-MX') === matricula.toLocaleLowerCase('es-MX')
+    );
+    if (duplicateMatricula) throw new Error('La matrícula ya está registrada en este plantel.');
     const existing = students.find((item) => item.id === id);
-    const record: Student = { id, schoolId: currentUser.schoolId, name: input.name.trim(), matricula: input.matricula.trim(), groupId: input.groupId, avatar: existing?.avatar || '', currentStatus: existing?.currentStatus || 'outside_school', currentZone: existing?.currentZone || 'unknown', distanceToCampusMeters: existing?.distanceToCampusMeters || 0, lastUpdated: new Date().toISOString(), active: existing?.active !== false };
+    const record: Student = { id, schoolId: currentUser.schoolId, name, matricula, groupId: input.groupId, avatar: existing?.avatar || '', currentStatus: existing?.currentStatus || 'outside_school', currentZone: existing?.currentZone || 'unknown', distanceToCampusMeters: existing?.distanceToCampusMeters || 0, lastUpdated: new Date().toISOString(), active: existing?.active !== false };
     const oldGroup = groups.find((item) => item.id === existing?.groupId);
     await syncStudentToCloud(record);
     if (oldGroup && oldGroup.id !== group.id) {
