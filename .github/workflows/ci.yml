@@ -35,3 +35,5 @@ jobs:
         run: bun run lint
       - name: Production build
         run: bun run build
+      - name: Smoke-test server startup and health endpoint
+        run: bun run test:server
