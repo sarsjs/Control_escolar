@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import {
@@ -109,11 +109,20 @@ export default function App() {
         }
 
         const role = profile.role as UserRole;
+        const schoolId = typeof profile.schoolId === 'string' ? profile.schoolId : undefined;
+        if (role !== 'superadmin' && schoolId) {
+          const schoolSnapshot = await getDoc(doc(db, 'schools', schoolId));
+          if (schoolSnapshot.exists() && schoolSnapshot.data().status === 'suspended') {
+            await signOut(auth);
+            if (active) setCurrentUser(null);
+            return;
+          }
+        }
+
         const profileName = typeof profile.name === 'string'
           ? profile.name
           : (firebaseUser.displayName || firebaseUser.email || 'Usuario');
         const profileAvatar = typeof profile.avatar === 'string' ? profile.avatar : '';
-        const schoolId = typeof profile.schoolId === 'string' ? profile.schoolId : undefined;
         const linkedEntityId = typeof profile.linkedEntityId === 'string' ? profile.linkedEntityId : undefined;
 
         if (active) {
@@ -718,18 +727,100 @@ export default function App() {
   // 17. SaaS Multi-School Handlers (Dueño de la App)
   const handleAddSchool = async (newSchool: SchoolInstitution) => {
     try {
-      // Do not show a school as registered until Firestore confirms persistence.
+      // Persist the school first. Director provisioning is a separate, authenticated
+      // server operation because the browser must never create privileged accounts.
       await syncSchoolToCloud(newSchool);
       setCurrentSchool(newSchool);
       setSchools((prev) => [newSchool, ...prev.filter((school) => school.id !== newSchool.id)]);
+    } catch (error) {
+      console.error('No se pudo guardar el plantel en Firestore:', error);
+      window.alert('No se pudo registrar el plantel. Revisa la conexión y vuelve a intentarlo.');
+      return;
+    }
+
+    try {
+      const signedInUser = auth.currentUser;
+      if (!signedInUser) throw new Error('La sesión del superadministrador ya no está activa.');
+      const idToken = await signedInUser.getIdToken();
+      const response = await fetch('/api/admin/provision-director', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ schoolId: newSchool.id }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof payload.error === 'string' ? payload.error : 'No se pudo crear la cuenta del director.');
+      }
+
+      // Firebase sends the secure password-setup email only after the Auth account exists.
+      await sendPasswordResetEmail(auth, newSchool.directorEmail.trim());
       pushNotification(
         'info',
-        'Nuevo Plantel Escolar Afiliado',
-        `Se registró el plantel ${newSchool.name} (CCT: ${newSchool.cct}). El acceso del director deberá aprovisionarse por Firebase Authentication.`,
+        'Plantel y director registrados',
+        `Se creó la cuenta de ${newSchool.directorName} para ${newSchool.name}. Se envió el correo para establecer su contraseña a ${newSchool.directorEmail}.`,
         'superadmin'
       );
     } catch (error) {
-      console.error('No se pudo guardar el plantel en Firestore:', error);
+      const reason = error instanceof Error ? error.message : String(error);
+      console.error('No se completó la invitación del director:', error);
+      pushNotification(
+        'info',
+        'Plantel registrado; invitación pendiente',
+        `El plantel ${newSchool.name} sí quedó guardado, pero no se pudo completar el alta o el envío del correo del director. Detalle: ${reason}`,
+        'superadmin'
+      );
+      window.alert(
+        `El plantel "${newSchool.name}" quedó registrado, pero la invitación del director está pendiente. ${reason}\n\nNo registres otra escuela para intentarlo de nuevo; revisa el error y vuelve a enviar la invitación cuando esté disponible.`
+      );
+    }
+  };
+
+  const handleProvisionDirector = async (school: SchoolInstitution): Promise<void> => {
+    try {
+      const signedInUser = auth.currentUser;
+      if (!signedInUser) throw new Error('La sesión del superadministrador ya no está activa.');
+      if (!school.directorEmail?.trim() || !school.directorName?.trim()) {
+        throw new Error('Este plantel no tiene nombre y correo del director. Abre “Ajustar Cerca / Datos” y verifica los datos registrados.');
+      }
+
+      const idToken = await signedInUser.getIdToken();
+      const response = await fetch('/api/admin/provision-director', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ schoolId: school.id }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof payload.error === 'string'
+          ? payload.error
+          : 'No se pudo preparar la cuenta del director.');
+      }
+
+      const targetEmail = typeof payload.email === 'string' ? payload.email : school.directorEmail.trim();
+      await sendPasswordResetEmail(auth, targetEmail);
+      pushNotification(
+        'info',
+        'Invitación del director enviada',
+        `Se enviaron instrucciones para establecer o restablecer la contraseña de ${school.directorName} (${targetEmail}) en ${school.name}.`,
+        'superadmin'
+      );
+      window.alert(`Se solicitó el envío de instrucciones para ${targetEmail}. Pídele al director que revise también la carpeta de spam.`);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.error('No se pudo invitar o reenviar la invitación del director:', error);
+      pushNotification(
+        'info',
+        'Invitación del director pendiente',
+        `No se completó el envío para ${school.name}. Detalle: ${reason}`,
+        'superadmin'
+      );
+      window.alert(`No se pudo completar la invitación de ${school.name}. ${reason}`);
     }
   };
 
@@ -749,6 +840,29 @@ export default function App() {
       );
     } catch (error) {
       console.error('No se pudieron guardar los parámetros del plantel en Firestore:', error);
+    }
+  };
+
+  const handleToggleSchoolStatus = async (school: SchoolInstitution) => {
+    const updatedSchool: SchoolInstitution = {
+      ...school,
+      status: school.status === 'suspended' ? 'active' : 'suspended',
+    };
+    try {
+      await syncSchoolToCloud(updatedSchool);
+      setSchools((prev) => prev.map((item) => item.id === school.id ? updatedSchool : item));
+      if (currentSchool?.id === school.id) setCurrentSchool(updatedSchool);
+      pushNotification(
+        'info',
+        updatedSchool.status === 'suspended' ? 'Plantel desactivado' : 'Plantel reactivado',
+        updatedSchool.status === 'suspended'
+          ? `${school.name} quedó suspendido. Sus registros se conservaron.`
+          : `${school.name} volvió a marcarse como activo.`,
+        'superadmin'
+      );
+    } catch (error) {
+      console.error('No se pudo cambiar el estado del plantel en Firestore:', error);
+      window.alert('No se pudo guardar el cambio de estado. El plantel no se modificó; revisa la conexión y vuelve a intentarlo.');
     }
   };
 
@@ -866,6 +980,8 @@ export default function App() {
             schools={schools}
             onAddSchool={handleAddSchool}
             onUpdateSchool={handleUpdateSchool}
+            onToggleSchoolStatus={handleToggleSchoolStatus}
+            onProvisionDirector={handleProvisionDirector}
           />
         )}
 
