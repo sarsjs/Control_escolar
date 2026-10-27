@@ -29,6 +29,8 @@ jobs:
         # Regenerate the lockfile in the runner before checking/building.
         # The repository lockfile should be committed after dependency updates.
         run: bun install
+      - name: Validate server syntax
+        run: node --check server.js
       - name: TypeScript check
         run: bun run lint
       - name: Production build
