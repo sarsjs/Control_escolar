@@ -37,7 +37,7 @@ app.post('/api/admin/provision-director', async (req, res) => {
     }
 
     const schoolId = typeof req.body?.schoolId === 'string' ? req.body.schoolId.trim() : '';
-    if (!/^sch-[A-Za-z0-9-]{1,100}$/.test(schoolId)) {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(schoolId)) {
       return res.status(400).json({ error: 'Identificador de plantel no válido.' });
     }
     const schoolSnap = await adminDb.collection('schools').doc(schoolId).get();
