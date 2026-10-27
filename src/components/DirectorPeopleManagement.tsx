@@ -30,7 +30,7 @@ export const DirectorPeopleManagement: React.FC<Props> = ({ orientadores, teache
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const activeGroups = useMemo(() => groups.filter((g) => g.active !== false), [groups]);
+  const activeGroups = useMemo(() => groups, [groups]);
   const reset = () => { setEditingId(undefined); setName(''); setEmail(''); setPhone(''); setDetail(''); setMatricula(''); setGroupId(activeGroups[0]?.id || ''); };
   const startEdit = (kind: PersonTab, item: any) => {
     setTab(kind); setEditingId(item.id); setName(item.name || ''); setEmail(item.email || '');
