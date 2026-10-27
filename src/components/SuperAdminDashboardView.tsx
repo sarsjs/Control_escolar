@@ -27,6 +27,7 @@ interface SuperAdminDashboardViewProps {
   schools: SchoolInstitution[];
   onAddSchool: (school: SchoolInstitution) => void;
   onUpdateSchool: (school: SchoolInstitution) => void;
+  onToggleSchoolStatus: (school: SchoolInstitution) => void;
 }
 
 export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = ({
@@ -34,6 +35,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
   schools,
   onAddSchool,
   onUpdateSchool,
+  onToggleSchoolStatus,
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'trial' | 'suspended'>('all');
@@ -265,6 +267,15 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
           </button>
           <button
             type="button"
+            onClick={() => setStatusFilter('suspended')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+              statusFilter === 'suspended' ? 'bg-white text-rose-700 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Suspendidas ({schools.filter((s) => s.status === 'suspended').length})
+          </button>
+          <button
+            type="button"
             onClick={() => setStatusFilter('trial')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
               statusFilter === 'trial' ? 'bg-white text-amber-700 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
@@ -400,6 +411,23 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                 >
                   <Edit3 className="w-3.5 h-3.5" />
                   <span>Ajustar Cerca / Datos</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const action = school.status === 'suspended' ? 'reactivar' : 'desactivar';
+                    const detail = school.status === 'suspended'
+                      ? 'El plantel volverá a marcarse como activo.'
+                      : 'El plantel quedará suspendido, pero sus registros se conservarán.';
+                    if (window.confirm(`¿Confirmas ${action} “${school.name}”? ${detail}`)) {
+                      onToggleSchoolStatus(school);
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-xl border font-semibold transition-colors flex items-center gap-1.5 ${school.status === 'suspended' ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-rose-200 text-rose-700 hover:bg-rose-50'}`}
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>{school.status === 'suspended' ? 'Reactivar' : 'Desactivar'}</span>
                 </button>
 
               </div>
