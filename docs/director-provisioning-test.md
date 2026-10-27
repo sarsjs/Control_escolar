@@ -13,14 +13,15 @@ Esta funcionalidad está en la rama `fix/director-account-provisioning` y en el 
 ## Prueba antes de integrar
 
 1. Usa solo el backend de pruebas y confirma que la rama desplegada sea `fix/director-account-provisioning`. No cambies `main` ni producción.
-2. Elige un plantel de prueba con correo de director válido y que no pertenezca a una cuenta existente.
-3. Inicia sesión con el superadministrador autorizado y registra el plantel una sola vez.
-4. En Authentication > Users, comprueba que exista la cuenta del director con ese correo.
-5. En Firestore, dentro de la base nombrada arriba, comprueba `users/{UID}` y verifica `role: "director"`, `schoolId` igual al ID del plantel y `status: "pending_password_setup"`.
-6. Comprueba el correo de establecimiento de contraseña, incluida la carpeta de spam. No compartas ni copies aquí enlaces de restablecimiento ni contraseñas.
-7. Abre el enlace en una ventana privada, establece la contraseña y prueba el inicio de sesión del director.
-8. Comprueba que una llamada sin sesión o con usuario que no sea superadministrador reciba 401/403.
-9. Si falla, conserva el mensaje exacto y el registro del servidor, pero oculta correos personales, tokens y enlaces de acción antes de compartirlos.
+2. Inicia sesión con el superadministrador autorizado.
+3. Para probar un plantel ya registrado (por ejemplo, EPO 264), usa **“Invitar / reenviar director”**; no registres otra vez el mismo plantel. Confirma antes que el nombre y correo del director sean correctos.
+4. Para probar un plantel nuevo, usa un correo de prueba que no pertenezca a una cuenta existente y regístralo una sola vez.
+5. En Authentication > Users, comprueba que exista la cuenta del director con ese correo.
+6. En Firestore, dentro de la base nombrada arriba, comprueba `users/{UID}` y verifica `role: "director"`, `schoolId` igual al ID del plantel y `status: "pending_password_setup"` cuando la cuenta sea recién creada.
+7. Comprueba el correo de establecimiento/restablecimiento de contraseña, incluida la carpeta de spam. No compartas ni copies aquí enlaces de restablecimiento ni contraseñas.
+8. Abre el enlace en una ventana privada, establece la contraseña y prueba el inicio de sesión del director.
+9. Comprueba que una llamada sin sesión o con usuario que no sea superadministrador reciba 401/403.
+10. Si falla, conserva el mensaje exacto y el registro del servidor, pero oculta correos personales, tokens y enlaces de acción antes de compartirlos.
 
 ## Resultado esperado y recuperación
 
