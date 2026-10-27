@@ -778,6 +778,52 @@ export default function App() {
     }
   };
 
+  const handleProvisionDirector = async (school: SchoolInstitution): Promise<void> => {
+    try {
+      const signedInUser = auth.currentUser;
+      if (!signedInUser) throw new Error('La sesión del superadministrador ya no está activa.');
+      if (!school.directorEmail?.trim() || !school.directorName?.trim()) {
+        throw new Error('Este plantel no tiene nombre y correo del director. Abre “Ajustar Cerca / Datos” y verifica los datos registrados.');
+      }
+
+      const idToken = await signedInUser.getIdToken();
+      const response = await fetch('/api/admin/provision-director', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ schoolId: school.id }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof payload.error === 'string'
+          ? payload.error
+          : 'No se pudo preparar la cuenta del director.');
+      }
+
+      const targetEmail = typeof payload.email === 'string' ? payload.email : school.directorEmail.trim();
+      await sendPasswordResetEmail(auth, targetEmail);
+      pushNotification(
+        'info',
+        'Invitación del director enviada',
+        `Se enviaron instrucciones para establecer o restablecer la contraseña de ${school.directorName} (${targetEmail}) en ${school.name}.`,
+        'superadmin'
+      );
+      window.alert(`Se solicitó el envío de instrucciones para ${targetEmail}. Pídele al director que revise también la carpeta de spam.`);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.error('No se pudo invitar o reenviar la invitación del director:', error);
+      pushNotification(
+        'info',
+        'Invitación del director pendiente',
+        `No se completó el envío para ${school.name}. Detalle: ${reason}`,
+        'superadmin'
+      );
+      window.alert(`No se pudo completar la invitación de ${school.name}. ${reason}`);
+    }
+  };
+
   const handleUpdateSchool = async (updatedSchool: SchoolInstitution) => {
     try {
       // Keep the UI aligned with persisted data if a write is rejected.
@@ -935,6 +981,7 @@ export default function App() {
             onAddSchool={handleAddSchool}
             onUpdateSchool={handleUpdateSchool}
             onToggleSchoolStatus={handleToggleSchoolStatus}
+            onProvisionDirector={handleProvisionDirector}
           />
         )}
 
