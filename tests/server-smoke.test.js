@@ -39,6 +39,11 @@ try {
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { ok: true, service: 'aulacontrol' });
 
+  const homeResponse = await fetch(`http://127.0.0.1:${port}/`);
+  assert.equal(homeResponse.status, 200, 'The SPA root must be served successfully.');
+  assert.match(homeResponse.headers.get('content-type') || '', /text\/html/i);
+  assert.match(await homeResponse.text(), /<html[\s>]/i, 'The SPA root must return the built HTML document.');
+
   const invalidSessionResponse = await fetch(`http://127.0.0.1:${port}/api/admin/provision-account`, {
     method: 'POST',
     headers: {
@@ -48,7 +53,7 @@ try {
     body: JSON.stringify({ role: 'teacher', schoolId: 'test-school', linkedEntityId: 'test-user', email: 'teacher@example.com', name: 'Test Teacher' }),
   });
   assert.equal(invalidSessionResponse.status, 401, 'Invalid bearer tokens must be rejected as unauthenticated.');
-  console.log('Server smoke test passed: /healthz returned HTTP 200 and invalid Firebase sessions returned HTTP 401.');
+  console.log('Server smoke test passed: /healthz and SPA root returned HTTP 200; invalid Firebase sessions returned HTTP 401.');
 } finally {
   child.kill('SIGTERM');
   await Promise.race([
