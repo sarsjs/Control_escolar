@@ -232,7 +232,7 @@ export default function App() {
         }
       });
     } else {
-      if (!isSuperAdmin) {
+      if (currentUser.role === 'director') {
         unsubscribeOrientadores = subscribeToOrientadores(currentUser.schoolId, (items) => setOrientadores(items));
         unsubscribeTeachers = subscribeToTeachers(currentUser.schoolId, (items) => setTeachers(items));
       }
