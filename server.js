@@ -90,8 +90,24 @@ app.post('/api/admin/provision-account', async (req, res) => {
     }
 
     try {
-      await adminAuth.getUserByEmail(email);
-      return res.status(409).json({ error: 'Ya existe una cuenta con ese correo. No se vinculó ni modificó.' });
+      const existingAuthUser = await adminAuth.getUserByEmail(email);
+      const existingProfileSnap = await adminDb.collection('users').doc(existingAuthUser.uid).get();
+      const existingProfile = existingProfileSnap.data();
+      if (existingProfileSnap.exists
+        && existingProfile?.role === role
+        && existingProfile?.schoolId === schoolId
+        && (existingProfile?.linkedEntityId || '') === linkedEntityId) {
+        return res.status(200).json({
+          ok: true,
+          uid: existingAuthUser.uid,
+          email,
+          role,
+          alreadyProvisioned: true,
+          passwordSetupRequired: true,
+          message: 'La cuenta ya está vinculada correctamente. Puede reenviarse el correo de configuración de contraseña.',
+        });
+      }
+      return res.status(409).json({ error: 'Ya existe una cuenta con ese correo, pero no coincide con esta ficha escolar. No se vinculó ni modificó.' });
     } catch (error) {
       if (error?.code !== 'auth/user-not-found') throw error;
     }
