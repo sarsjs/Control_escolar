@@ -79,6 +79,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, currentSch
       }
 
       const role = profile.role as UserRole;
+      const schoolId = typeof profile.schoolId === 'string' ? profile.schoolId : undefined;
+      if (role !== 'superadmin' && schoolId) {
+        const schoolSnapshot = await getDoc(doc(db, 'schools', schoolId));
+        if (schoolSnapshot.exists() && schoolSnapshot.data().status === 'suspended') {
+          await signOut(auth);
+          setError('El acceso a este plantel está suspendido. Contacta al administrador de AulaControl.');
+          return;
+        }
+      }
+
       const user: UserAccount = {
         id: credential.user.uid,
         username: typeof profile.username === 'string' ? profile.username : (credential.user.email || cleanEmail),
@@ -87,7 +97,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, currentSch
         role,
         avatar: typeof profile.avatar === 'string' ? profile.avatar : '',
         title: typeof profile.title === 'string' ? profile.title : role,
-        ...(typeof profile.schoolId === 'string' ? { schoolId: profile.schoolId } : {}),
+        ...(schoolId ? { schoolId } : {}),
         ...(typeof profile.linkedEntityId === 'string' ? { linkedEntityId: profile.linkedEntityId } : {}),
       };
       onLoginSuccess(user);
