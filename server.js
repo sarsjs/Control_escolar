@@ -15,6 +15,15 @@ app.use(express.json({ limit: '32kb' }));
 const firebaseConfig = JSON.parse(
   await readFile(new URL('./firebase-applet-config.json', import.meta.url), 'utf8')
 );
+
+// Fail closed instead of silently falling back to the default Firestore database.
+if (
+  typeof firebaseConfig.projectId !== 'string' || !firebaseConfig.projectId.trim() ||
+  typeof firebaseConfig.firestoreDatabaseId !== 'string' || !firebaseConfig.firestoreDatabaseId.trim()
+) {
+  throw new Error('Firebase configuration must define projectId and firestoreDatabaseId.');
+}
+
 const adminApp = getApps().length
   ? getApps()[0]
   : initializeApp({ projectId: firebaseConfig.projectId });
