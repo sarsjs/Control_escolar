@@ -14,7 +14,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, testFirestoreConnection } from '../firebase';
-import { Student, SchoolGroup, AuditLogEntry, AttendanceDispute, SystemNotification, SchoolInstitution, EtaReport } from '../types';
+import { Student, SchoolGroup, AuditLogEntry, AttendanceDispute, SystemNotification, SchoolInstitution, EtaReport, Orientador, Teacher } from '../types';
 
 export { testFirestoreConnection };
 
@@ -84,6 +84,23 @@ export function subscribeToGroupById(
  */
 export async function syncStudentToCloud(student: Student) {
   await setDoc(doc(db, 'students', student.id), student, { merge: true });
+}
+
+/** Atomically import a roster and update its destination group in one Firestore batch. */
+export async function syncStudentsAndGroupToCloud(students: Student[], group: SchoolGroup) {
+  if (students.length > 450) throw new Error('Importa máximo 450 alumnos por archivo para mantener la operación atómica.');
+  const batch = writeBatch(db);
+  for (const student of students) {
+    if (!student.schoolId || student.schoolId !== group.schoolId || student.groupId !== group.id) {
+      throw new Error('Los alumnos importados deben pertenecer al mismo plantel y grupo destino.');
+    }
+    batch.set(doc(db, 'students', student.id), student, { merge: true });
+  }
+  batch.set(doc(db, 'groups', group.id), {
+    ...group,
+    teacherIds: [...new Set(group.schedule.map((slot) => slot.teacherId).filter(Boolean))]
+  }, { merge: true });
+  await batch.commit();
 }
 
 /** Atomically save an attendance correction and its immutable audit record. */
@@ -292,4 +309,29 @@ export async function resolveDisputeToCloud(dispute: AttendanceDispute, student?
     batch.set(doc(db, 'audit_logs', auditEntry.id), auditEntry);
   }
   await batch.commit();
+}
+
+
+/** School-scoped real-time staff rosters. Never query all schools for a director. */
+export function subscribeToOrientadores(schoolId: string | undefined, onUpdate: (items: Orientador[]) => void) {
+  if (!schoolId) { onUpdate([]); return () => {}; }
+  return onSnapshot(query(collection(db, 'orientadores'), where('schoolId', '==', schoolId)),
+    (snapshot) => onUpdate(snapshot.docs.map((item) => item.data() as Orientador)),
+    (error) => console.warn('Firestore orientadores subscription error:', error));
+}
+
+export function subscribeToTeachers(schoolId: string | undefined, onUpdate: (items: Teacher[]) => void) {
+  if (!schoolId) { onUpdate([]); return () => {}; }
+  return onSnapshot(query(collection(db, 'teachers'), where('schoolId', '==', schoolId)),
+    (snapshot) => onUpdate(snapshot.docs.map((item) => item.data() as Teacher)),
+    (error) => console.warn('Firestore teachers subscription error:', error));
+}
+
+/** Persist roster records only. Authentication credentials must be provisioned server-side. */
+export async function syncOrientadorToCloud(item: Orientador & { schoolId: string }) {
+  await setDoc(doc(db, 'orientadores', item.id), item, { merge: true });
+}
+
+export async function syncTeacherToCloud(item: Teacher & { schoolId: string }) {
+  await setDoc(doc(db, 'teachers', item.id), item, { merge: true });
 }

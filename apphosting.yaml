@@ -1,0 +1,12 @@
+# Explicitly run the Express server for the Vite SPA and account-provisioning API.
+scripts:
+  runCommand: node server.js
+
+# Keep the SPA assets and runtime configuration needed by server.js.
+outputFiles:
+  serverApp:
+    include:
+      - dist
+      - server.js
+      - firebase-applet-config.json
+      - package.json

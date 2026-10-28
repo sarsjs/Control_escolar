@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DirectorPeopleManagement } from './DirectorPeopleManagement';
 import {
   Orientador,
   SchoolGroup,
@@ -45,6 +46,13 @@ interface DirectorDashboardViewProps {
     reason: string
   ) => void;
   onResolveDispute: (disputeId: string, approved: boolean, notes: string) => void;
+  onSaveOrientador: (input: { id?: string; name: string; email: string; phone: string; cubicle: string }) => Promise<void>;
+  onSaveTeacher: (input: { id?: string; name: string; email: string; specialty: string }) => Promise<void>;
+  onSaveStudent: (input: { id?: string; name: string; matricula: string; groupId: string }) => Promise<void>;
+  onSetRosterActive: (kind: 'orientador' | 'teacher' | 'student', id: string, active: boolean) => Promise<void>;
+  onImportStudentsCsv: (groupId: string, rows: { name: string; matricula: string }[]) => Promise<void>;
+  onProvisionAccount: (kind: 'orientador' | 'teacher' | 'student', id: string) => Promise<void>;
+  onUpdateDirectorGroup: (input: { id: string; name: string; semester: number; turn: 'Matutino' | 'Vespertino'; orientadorId: string; active: boolean }) => Promise<void>;
 }
 
 export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
@@ -61,10 +69,25 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
   onCreateNewGroup,
   onDirectorCorrectAttendance,
   onResolveDispute,
+  onSaveOrientador,
+  onSaveTeacher,
+  onSaveStudent,
+  onSetRosterActive,
+  onImportStudentsCsv,
+  onProvisionAccount,
+  onUpdateDirectorGroup,
 }) => {
-  const [activeTab, setActiveTab] = useState<'matrix' | 'audit' | 'groups' | 'disputes'>('matrix');
+  const [activeTab, setActiveTab] = useState<'matrix' | 'audit' | 'attendance' | 'groups' | 'disputes' | 'people'>('matrix');
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [groupCreateError, setGroupCreateError] = useState<string>('');
+  const [editingGroupId, setEditingGroupId] = useState('');
+  const [editGroupName, setEditGroupName] = useState('');
+  const [editGroupSemester, setEditGroupSemester] = useState(1);
+  const [editGroupTurn, setEditGroupTurn] = useState<'Matutino' | 'Vespertino'>('Matutino');
+  const [editGroupOrientador, setEditGroupOrientador] = useState('');
+  const [editGroupActive, setEditGroupActive] = useState(true);
+  const [groupBusy, setGroupBusy] = useState(false);
+  const [groupError, setGroupError] = useState('');
 
   // Modals
   const [isAddGroupOpen, setIsAddGroupOpen] = useState<boolean>(false);
@@ -226,6 +249,13 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
           <div className="flex items-center gap-2 py-2">
             <button
               type="button"
+              onClick={() => setActiveTab('people')}
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${activeTab === 'people' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              Personal y Alumnos
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('matrix')}
               className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
                 activeTab === 'matrix' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
@@ -235,13 +265,14 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('groups')}
+              onClick={() => setActiveTab('attendance')}
               className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
                 activeTab === 'groups' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Supervisión y Corrección de Asistencias
             </button>
+            <button type="button" onClick={() => setActiveTab('groups')} className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${activeTab === 'groups' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>Administración de Grupos</button>
             <button
               type="button"
               onClick={() => setActiveTab('audit')}
@@ -262,6 +293,43 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
             </button>
           </div>
         </div>
+
+        {activeTab === 'people' && (
+          <DirectorPeopleManagement
+            orientadores={orientadores}
+            teachers={teachers}
+            students={students}
+            groups={groups}
+            onSaveOrientador={onSaveOrientador}
+            onSaveTeacher={onSaveTeacher}
+            onSaveStudent={onSaveStudent}
+            onSetRosterActive={onSetRosterActive}
+            onImportStudentsCsv={onImportStudentsCsv}
+            onProvisionAccount={onProvisionAccount}
+          />
+        )}
+
+        {activeTab === 'groups' && (
+          <div className="space-y-4 p-4 sm:p-6">
+            <div><h3 className="text-base font-bold text-slate-900">Administración de grupos</h3><p className="mt-1 text-sm text-slate-500">Edita nombre, semestre, turno y orientador. Archivar conserva alumnos e historial de asistencia.</p></div>
+            {groupError && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{groupError}</p>}
+            {groups.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">Todavía no hay grupos registrados.</p>}
+            <div className="grid gap-3 lg:grid-cols-2">{groups.map((group) => {
+              const isEditing = editingGroupId === group.id;
+              return <article key={group.id} className="space-y-3 rounded-2xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-900">{group.name}</p><p className="mt-1 text-xs text-slate-500">{group.semester}° semestre · {group.turn} · {group.studentIds.length} alumnos</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${group.active === false ? 'bg-slate-100 text-slate-500' : 'bg-emerald-50 text-emerald-700'}`}>{group.active === false ? 'ARCHIVADO' : 'ACTIVO'}</span></div>
+                {isEditing ? <form className="grid gap-3 sm:grid-cols-2" onSubmit={async (event) => { event.preventDefault(); setGroupBusy(true); setGroupError(''); try { await onUpdateDirectorGroup({ id: group.id, name: editGroupName, semester: editGroupSemester, turn: editGroupTurn, orientadorId: editGroupOrientador, active: editGroupActive }); setEditingGroupId(''); setSuccessMessage('Grupo actualizado correctamente.'); setTimeout(() => setSuccessMessage(''), 4000); } catch (error) { setGroupError(error instanceof Error ? error.message : 'No se pudo actualizar el grupo.'); } finally { setGroupBusy(false); } }}>
+                  <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Nombre<input className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" value={editGroupName} onChange={(e) => setEditGroupName(e.target.value)} required maxLength={100}/></label>
+                  <label className="text-xs font-semibold text-slate-600">Semestre<select className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" value={editGroupSemester} onChange={(e) => setEditGroupSemester(Number(e.target.value))}>{[1,2,3,4,5,6].map((n) => <option key={n} value={n}>{n}° semestre</option>)}</select></label>
+                  <label className="text-xs font-semibold text-slate-600">Turno<select className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" value={editGroupTurn} onChange={(e) => setEditGroupTurn(e.target.value as 'Matutino' | 'Vespertino')}><option>Matutino</option><option>Vespertino</option></select></label>
+                  <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Orientador<select className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" value={editGroupOrientador} onChange={(e) => setEditGroupOrientador(e.target.value)}><option value="">Sin orientador</option>{orientadores.filter((o) => o.active !== false).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 sm:col-span-2"><input type="checkbox" checked={editGroupActive} onChange={(e) => setEditGroupActive(e.target.checked)}/> Grupo activo (desmarcar para archivarlo)</label>
+                  <div className="flex gap-2 sm:col-span-2"><button type="submit" disabled={groupBusy} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{groupBusy ? 'Guardando…' : 'Guardar cambios'}</button><button type="button" className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold" onClick={() => setEditingGroupId('')}>Cancelar</button></div>
+                </form> : <button type="button" className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50" onClick={() => { setEditingGroupId(group.id); setEditGroupName(group.name); setEditGroupSemester(group.semester); setEditGroupTurn(group.turn); setEditGroupOrientador(group.orientadorId || ''); setEditGroupActive(group.active !== false); setGroupError(''); }}>Editar grupo</button>}
+              </article>;
+            })}</div>
+          </div>
+        )}
 
         {/* TAB 1: MATRIZ DE REPARTO Y SUSTITUCIONES */}
         {activeTab === 'matrix' && (
@@ -379,7 +447,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
         )}
 
         {/* TAB 2: SUPERVISIÓN Y CORRECCIÓN DE ASISTENCIAS */}
-        {activeTab === 'groups' && (
+        {activeTab === 'attendance' && (
           <div className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>

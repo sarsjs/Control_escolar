@@ -5,9 +5,11 @@ on:
     branches:
       - main
       - "fix/**"
+      - "feature/**"
   pull_request:
     branches:
       - main
+      - "fix/**"
   workflow_dispatch:
 
 permissions:
@@ -27,7 +29,11 @@ jobs:
         # Regenerate the lockfile in the runner before checking/building.
         # The repository lockfile should be committed after dependency updates.
         run: bun install
+      - name: Validate server syntax
+        run: node --check server.js
       - name: TypeScript check
         run: bun run lint
       - name: Production build
         run: bun run build
+      - name: Smoke-test server startup and health endpoint
+        run: bun run test:server

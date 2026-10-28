@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { provisionSchoolAccount } from './utils/accountProvisioning';
 import {
   UserAccount,
   UserRole,
@@ -34,6 +35,7 @@ import { Cloud, CloudCheck } from 'lucide-react';
 import {
   testFirestoreConnection,
   syncStudentToCloud,
+  syncStudentsAndGroupToCloud,
   syncAttendanceCorrectionToCloud,
   recordDisputeToCloud,
   resolveDisputeToCloud,
@@ -47,6 +49,10 @@ import {
   syncGroupToCloud,
   subscribeToGroups,
   subscribeToDisputes,
+  subscribeToOrientadores,
+  subscribeToTeachers,
+  syncOrientadorToCloud,
+  syncTeacherToCloud,
 } from './utils/firebaseSync';
 
 export default function App() {
@@ -199,6 +205,8 @@ export default function App() {
     let unsubscribeStudents: (() => void) | undefined;
     let unsubscribeGroups: (() => void) | undefined;
     let unsubscribeStudentGroup: (() => void) | undefined;
+    let unsubscribeOrientadores: (() => void) | undefined;
+    let unsubscribeTeachers: (() => void) | undefined;
     const unsubscribeDisputes = subscribeToDisputes(
       currentUser.schoolId,
       isSuperAdmin,
@@ -226,6 +234,12 @@ export default function App() {
         }
       });
     } else {
+      if (currentUser.role === 'director') {
+        setOrientadores([]);
+        setTeachers([]);
+        unsubscribeOrientadores = subscribeToOrientadores(currentUser.schoolId, (items) => setOrientadores(items));
+        unsubscribeTeachers = subscribeToTeachers(currentUser.schoolId, (items) => setTeachers(items));
+      }
       unsubscribeStudents = subscribeToStudents(currentUser.schoolId, isSuperAdmin, (cloudStudents) => {
         setStudents(cloudStudents);
       });
@@ -243,6 +257,8 @@ export default function App() {
       unsubscribeStudents?.();
       unsubscribeGroups?.();
       unsubscribeStudentGroup?.();
+      unsubscribeOrientadores?.();
+      unsubscribeTeachers?.();
       unsubscribeSchools();
       unsubscribeDisputes();
     };
@@ -529,6 +545,100 @@ export default function App() {
     setDisputes((prev) => prev.map((item) => item.id === disputeId ? updatedDispute : item));
   };
 
+
+  // Director roster management: persist first, then reflect the confirmed change locally.
+  const handleProvisionAccount = async (kind: 'orientador' | 'teacher' | 'student', id: string) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) {
+      throw new Error('Solo dirección con plantel asignado puede crear accesos.');
+    }
+    if (kind === 'student') {
+      const student = students.find((item) => item.id === id && item.schoolId === currentUser.schoolId);
+      const email = student && 'email' in student && typeof student.email === 'string' ? student.email.trim() : '';
+      if (!student || !email) throw new Error('Este alumno no tiene correo registrado. Primero se debe definir su método de acceso.');
+      await provisionSchoolAccount({ role: 'student', schoolId: currentUser.schoolId, linkedEntityId: student.id, email, name: student.name });
+      return;
+    }
+    const entity = kind === 'orientador'
+      ? orientadores.find((item) => item.id === id && item.schoolId === currentUser.schoolId)
+      : teachers.find((item) => item.id === id && item.schoolId === currentUser.schoolId);
+    if (!entity || entity.active === false || !entity.email?.trim()) {
+      throw new Error('La ficha debe estar activa y tener un correo válido.');
+    }
+    await provisionSchoolAccount({
+      role: kind,
+      schoolId: currentUser.schoolId,
+      linkedEntityId: entity.id,
+      email: entity.email.trim(),
+      name: entity.name.trim(),
+    });
+  };
+
+  const handleSaveOrientador = async (input: { id?: string; name: string; email: string; phone: string; cubicle: string }) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
+    const id = input.id || `ori-${Date.now()}`;
+    const existing = orientadores.find((item) => item.id === id);
+    const record = { id, name: input.name.trim(), email: input.email.trim(), phone: input.phone.trim(), cubicle: input.cubicle.trim(), avatar: existing?.avatar || '', assignedGroupIds: existing?.assignedGroupIds || [], active: existing?.active !== false, schoolId: currentUser.schoolId };
+    await syncOrientadorToCloud(record);
+    setOrientadores((prev) => [...prev.filter((item) => item.id !== id), record]);
+  };
+
+  const handleSaveTeacher = async (input: { id?: string; name: string; email: string; specialty: string }) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
+    const id = input.id || `doc-${Date.now()}`;
+    const existing = teachers.find((item) => item.id === id);
+    const record = { id, name: input.name.trim(), email: input.email.trim(), specialty: input.specialty.trim(), avatar: existing?.avatar || '', assignedGroupIds: existing?.assignedGroupIds || [], active: existing?.active !== false, schoolId: currentUser.schoolId };
+    await syncTeacherToCloud(record);
+    setTeachers((prev) => [...prev.filter((item) => item.id !== id), record]);
+  };
+
+  const handleSaveStudent = async (input: { id?: string; name: string; matricula: string; groupId: string }) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
+    const group = groups.find((item) => item.id === input.groupId && item.schoolId === currentUser.schoolId && item.active !== false);
+    if (!group) throw new Error('Selecciona un grupo activo de este plantel.');
+    const name = input.name.trim();
+    const matricula = input.matricula.trim();
+    if (!name || !matricula) throw new Error('El nombre y la matrícula son obligatorios.');
+    const id = input.id || `stu-${Date.now()}`;
+    const duplicateMatricula = students.find((item) =>
+      item.schoolId === currentUser.schoolId
+      && item.id !== id
+      && item.matricula.trim().toLocaleLowerCase('es-MX') === matricula.toLocaleLowerCase('es-MX')
+    );
+    if (duplicateMatricula) throw new Error('La matrícula ya está registrada en este plantel.');
+    const existing = students.find((item) => item.id === id);
+    const record: Student = { id, schoolId: currentUser.schoolId, name, matricula, groupId: input.groupId, avatar: existing?.avatar || '', currentStatus: existing?.currentStatus || 'outside_school', currentZone: existing?.currentZone || 'unknown', distanceToCampusMeters: existing?.distanceToCampusMeters || 0, lastUpdated: new Date().toISOString(), active: existing?.active !== false };
+    const oldGroup = groups.find((item) => item.id === existing?.groupId);
+    await syncStudentToCloud(record);
+    if (oldGroup && oldGroup.id !== group.id) {
+      const updatedOld = { ...oldGroup, studentIds: oldGroup.studentIds.filter((studentId) => studentId !== id) };
+      await syncGroupToCloud(updatedOld);
+      setGroups((prev) => prev.map((item) => item.id === updatedOld.id ? updatedOld : item));
+    }
+    if (!group.studentIds.includes(id)) {
+      const updatedGroup = { ...group, studentIds: [...group.studentIds, id] };
+      await syncGroupToCloud(updatedGroup);
+      setGroups((prev) => prev.map((item) => item.id === updatedGroup.id ? updatedGroup : item));
+    }
+    setStudents((prev) => [...prev.filter((item) => item.id !== id), record]);
+  };
+
+  const handleSetRosterActive = async (kind: 'orientador' | 'teacher' | 'student', id: string, active: boolean) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
+    if (kind === 'orientador') {
+      const item = orientadores.find((entry) => entry.id === id); if (!item) return;
+      const record = { ...item, active, schoolId: currentUser.schoolId }; await syncOrientadorToCloud(record);
+      setOrientadores((prev) => prev.map((entry) => entry.id === id ? record : entry));
+    } else if (kind === 'teacher') {
+      const item = teachers.find((entry) => entry.id === id); if (!item) return;
+      const record = { ...item, active, schoolId: currentUser.schoolId }; await syncTeacherToCloud(record);
+      setTeachers((prev) => prev.map((entry) => entry.id === id ? record : entry));
+    } else {
+      const item = students.find((entry) => entry.id === id); if (!item) return;
+      const record = { ...item, active, schoolId: currentUser.schoolId, lastUpdated: new Date().toISOString() }; await syncStudentToCloud(record);
+      setStudents((prev) => prev.map((entry) => entry.id === id ? record : entry));
+    }
+  };
+
   // 8. Director reassigns group
   const handleReassignGroupToOrientador = (groupId: string, newOrientadorId: string) => {
     setGroups((prev) =>
@@ -556,6 +666,24 @@ export default function App() {
     setGroups((prev) =>
       prev.map((g) => (g.id === groupId ? { ...g, temporarySubstituteOrientadorId: substituteOrientadorId } : g))
     );
+  };
+
+
+  const handleUpdateDirectorGroup = async (input: { id: string; name: string; semester: number; turn: 'Matutino' | 'Vespertino'; orientadorId: string; active: boolean }) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Solo dirección con plantel asignado puede modificar grupos.');
+    const existing = groups.find((group) => group.id === input.id && group.schoolId === currentUser.schoolId);
+    if (!existing) throw new Error('No se encontró el grupo de este plantel.');
+    if (!input.name.trim()) throw new Error('El nombre del grupo es obligatorio.');
+    if (input.orientadorId && !orientadores.some((item) => item.id === input.orientadorId && item.active !== false)) throw new Error('Selecciona un orientador activo de este plantel.');
+    const updated: SchoolGroup = { ...existing, name: input.name.trim(), semester: input.semester, turn: input.turn, orientadorId: input.orientadorId, active: input.active };
+    await syncGroupToCloud(updated);
+    setGroups((prev) => prev.map((group) => group.id === updated.id ? updated : group));
+    setOrientadores((prev) => prev.map((item) => {
+      const ids = new Set(item.assignedGroupIds || []);
+      if (item.id === existing.orientadorId) ids.delete(existing.id);
+      if (item.id === updated.orientadorId) ids.add(updated.id);
+      return { ...item, assignedGroupIds: [...ids] };
+    }));
   };
 
   // 10. Director creates new group
@@ -667,43 +795,59 @@ export default function App() {
 
   // 13. Import students only after Firestore confirms each write.
   const handleImportStudentsCsv = async (groupId: string, csvData: { name: string; matricula: string }[]) => {
-    const targetGroup = groups.find((group) => group.id === groupId);
-    if (!targetGroup?.schoolId || targetGroup.schoolId !== currentUser?.schoolId) {
-      console.error('Importación cancelada: el grupo no pertenece al plantel de la sesión actual.');
-      return;
+    if (!currentUser?.schoolId || !['director', 'orientador'].includes(currentUser.role)) {
+      throw new Error('Solo dirección u orientación con plantel asignado puede importar alumnos.');
     }
-    if (!csvData.length) return;
+    const targetGroup = groups.find((group) => group.id === groupId && group.schoolId === currentUser.schoolId && group.active !== false);
+    if (!targetGroup) throw new Error('El grupo destino no está activo o no pertenece a este plantel.');
+    if (currentUser.role === 'orientador' && targetGroup.orientadorId !== currentOrientadorEntity?.id &&
+        !currentOrientadorEntity?.assignedGroupIds?.includes(groupId)) {
+      throw new Error('Solo puedes importar alumnos a un grupo asignado a tu cuenta de orientación.');
+    }
+    if (!csvData.length) throw new Error('El archivo no contiene alumnos válidos.');
+    if (csvData.length > 450) throw new Error('Importa máximo 450 alumnos por archivo. Divide la lista en archivos más pequeños.');
 
-    const newStudents: Student[] = csvData.map((row, idx): Student => ({
-      id: `stu-csv-${Date.now()}-${idx}`,
-      name: row.name.trim(),
-      matricula: row.matricula.trim(),
+    const existingMatriculas = new Set(students
+      .filter((student) => student.schoolId === currentUser.schoolId)
+      .map((student) => student.matricula.trim().toLocaleLowerCase('es-MX')));
+    const seen = new Set<string>();
+    const cleanRows = csvData.map((row) => ({ name: row.name.trim(), matricula: row.matricula.trim() }));
+    for (const row of cleanRows) {
+      const key = row.matricula.toLocaleLowerCase('es-MX');
+      if (!row.name || !row.matricula) throw new Error('Cada fila debe tener nombre y matrícula.');
+      if (seen.has(key)) throw new Error('El archivo contiene matrículas repetidas.');
+      if (existingMatriculas.has(key)) throw new Error('La matrícula ' + row.matricula + ' ya está registrada en el plantel.');
+      seen.add(key);
+    }
+
+    const batchId = Date.now();
+    const newStudents: Student[] = cleanRows.map((row, idx): Student => ({
+      id: `stu-csv-${batchId}-${idx}`,
+      name: row.name,
+      matricula: row.matricula,
       groupId,
       schoolId: targetGroup.schoolId as string,
       avatar: '',
       currentStatus: 'outside_school',
       currentZone: 'Sin ubicación registrada',
       distanceToCampusMeters: 0,
-      lastUpdated: simulatedTime,
-    })).filter((student) => student.name && student.matricula);
-
-    if (!newStudents.length) return;
+      lastUpdated: new Date().toISOString(),
+      active: true,
+    }));
     const updatedGroup = {
       ...targetGroup,
-      studentIds: [...targetGroup.studentIds, ...newStudents.map((student) => student.id)],
+      studentIds: [...new Set([...targetGroup.studentIds, ...newStudents.map((student) => student.id)])],
     };
 
+    // Commit every student and the destination group atomically; no partial roster on failure.
     try {
-      // Save the roster and its group membership before reflecting success in the UI.
-      for (const student of newStudents) {
-        await syncStudentToCloud(student);
-      }
-      await syncGroupToCloud(updatedGroup);
-      setStudents((prev) => [...prev, ...newStudents]);
-      setGroups((prev) => prev.map((group) => group.id === groupId ? updatedGroup : group));
+      await syncStudentsAndGroupToCloud(newStudents, updatedGroup);
     } catch (error) {
-      console.error('La importación no se confirmó en Firestore. Revisa los registros antes de volver a intentarlo:', error);
+      console.error('La importación no se confirmó en Firestore:', error);
+      throw new Error('No se pudo completar la importación. No se confirmó ningún cambio del lote; revisa los permisos de Firestore.');
     }
+    setStudents((prev) => [...prev, ...newStudents]);
+    setGroups((prev) => prev.map((group) => group.id === groupId ? updatedGroup : group));
   };
 
   // 15. Teacher manual validate with audit
@@ -885,6 +1029,13 @@ export default function App() {
             onCreateNewGroup={handleCreateNewGroup}
             onDirectorCorrectAttendance={handleDirectorCorrectAttendance}
             onResolveDispute={handleResolveDispute}
+            onSaveOrientador={handleSaveOrientador}
+            onSaveTeacher={handleSaveTeacher}
+            onSaveStudent={handleSaveStudent}
+            onSetRosterActive={handleSetRosterActive}
+            onImportStudentsCsv={handleImportStudentsCsv}
+            onProvisionAccount={handleProvisionAccount}
+            onUpdateDirectorGroup={handleUpdateDirectorGroup}
           />
         )}
 
