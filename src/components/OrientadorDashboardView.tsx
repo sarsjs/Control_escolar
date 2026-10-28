@@ -33,6 +33,7 @@ interface OrientadorDashboardViewProps {
   allTeachers: Teacher[];
   disputes: AttendanceDispute[];
   simulatedTime: string;
+  onCreateGroup: (name: string, semester: number, turn: 'Matutino' | 'Vespertino') => void;
   onUpdateGroupSchedule: (groupId: string, newSchedule: GroupScheduleItem[]) => void;
   onAddStudentToGroup: (groupId: string, studentName: string, matricula: string) => void;
   onImportStudentsCsv: (groupId: string, csvData: { name: string; matricula: string }[]) => void;
@@ -47,6 +48,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   allTeachers,
   disputes,
   simulatedTime,
+  onCreateGroup,
   onUpdateGroupSchedule,
   onAddStudentToGroup,
   onImportStudentsCsv,
@@ -61,15 +63,19 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
     myGroups[0]?.id || allGroups[0]?.id || ''
   );
   const [activeTab, setActiveTab] = useState<'attendance' | 'schedule' | 'students' | 'disputes' | 'map'>('attendance');
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [newGroupSemester, setNewGroupSemester] = useState('1');
+  const [newGroupLetter, setNewGroupLetter] = useState('A');
+  const [newGroupTurn, setNewGroupTurn] = useState<'Matutino' | 'Vespertino'>('Matutino');
 
   // Modals
   const [isAddPeriodOpen, setIsAddPeriodOpen] = useState<boolean>(false);
   const [subjectName, setSubjectName] = useState<string>('');
-  const [startTime, setStartTime] = useState<string>('13:35');
-  const [endTime, setEndTime] = useState<string>('15:00');
+  const [startTime, setStartTime] = useState<string>('');
+  const [endTime, setEndTime] = useState<string>('');
   const [toleranceMinutes, setToleranceMinutes] = useState<number>(10);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(allTeachers[0]?.id || '');
-  const [classroom, setClassroom] = useState<string>('Aula 105');
+  const [classroom, setClassroom] = useState<string>('');
 
   // Add student
   const [isAddStudentOpen, setIsAddStudentOpen] = useState<boolean>(false);
@@ -78,12 +84,19 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
 
   // CSV import
   const [isCsvModalOpen, setIsCsvModalOpen] = useState<boolean>(false);
-  const [csvRawText, setCsvRawText] = useState<string>(
-    'Emiliano Vargas Sánchez,2026-B-0910\nValeria Castro Pineda,2026-B-0911\nLuis Fernando Mora,2026-B-0912'
-  );
+  const [csvRawText, setCsvRawText] = useState<string>('');
   const [csvSuccessMessage, setCsvSuccessMessage] = useState<string>('');
 
   const currentGroup = myGroups.find((g) => g.id === selectedGroupId) || myGroups[0];
+
+  const handleCreateGroup = (event: React.FormEvent) => {
+    event.preventDefault();
+    const semester = Number(newGroupSemester);
+    if (!Number.isInteger(semester) || semester < 1 || semester > 12 || !newGroupLetter.trim()) return;
+    onCreateGroup(`${semester}º Semestre · Grupo ${newGroupLetter.trim().toUpperCase()}`, semester, newGroupTurn);
+    setIsCreateGroupOpen(false);
+    setNewGroupLetter('A');
+  };
   const groupStudents = allStudents.filter((s) => s.groupId === currentGroup?.id);
 
   const myStudents = allStudents.filter((s) =>
@@ -170,6 +183,34 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   };
 
   return (
+    <>
+      {isCreateGroupOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+          <form onSubmit={handleCreateGroup} className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Crear grupo escolar</h2>
+              <p className="mt-1 text-sm text-slate-600">El grupo se guardará sin alumnos ni horario; esos datos se agregan después.</p>
+            </div>
+            <label className="block text-sm font-medium text-slate-700">Semestre
+              <select required value={newGroupSemester} onChange={(e) => setNewGroupSemester(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2.5">
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((semester) => <option key={semester} value={semester}>{semester}º semestre</option>)}
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-slate-700">Letra del grupo
+              <input required maxLength={5} value={newGroupLetter} onChange={(e) => setNewGroupLetter(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2.5" placeholder="A" />
+            </label>
+            <label className="block text-sm font-medium text-slate-700">Turno
+              <select value={newGroupTurn} onChange={(e) => setNewGroupTurn(e.target.value as 'Matutino' | 'Vespertino')} className="mt-1 w-full rounded-lg border border-slate-300 p-2.5">
+                <option value="Matutino">Matutino</option><option value="Vespertino">Vespertino</option>
+              </select>
+            </label>
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={() => setIsCreateGroupOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button>
+              <button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Crear grupo</button>
+            </div>
+          </form>
+        </div>
+      )}
     <div className="space-y-6">
       {/* Top Banner: Orientador Identity */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-wrap items-center justify-between gap-6">
@@ -196,7 +237,11 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
         {/* Group Selector Dropdown */}
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-500 font-semibold">Grupo activo:</span>
-          <select
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={() => setIsCreateGroupOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+              <Plus size={16} /> Crear grupo
+            </button>
+            <select
             value={selectedGroupId}
             onChange={(e) => setSelectedGroupId(e.target.value)}
             className="text-xs font-bold bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-hidden"
@@ -206,7 +251,8 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                 {g.name} ({g.studentIds.length} alumnos)
               </option>
             ))}
-          </select>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -812,5 +858,6 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
         )}
       </div>
     </div>
+    </>
   );
 };
