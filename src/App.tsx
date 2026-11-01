@@ -553,7 +553,7 @@ export default function App() {
     }
     if (kind === 'student') {
       const student = students.find((item) => item.id === id && item.schoolId === currentUser.schoolId);
-      const email = student && 'email' in student && typeof student.email === 'string' ? student.email.trim() : '';
+      const email = student?.email?.trim() || '';
       if (!student || !email) throw new Error('Este alumno no tiene correo registrado. Primero se debe definir su método de acceso.');
       await provisionSchoolAccount({ role: 'student', schoolId: currentUser.schoolId, linkedEntityId: student.id, email, name: student.name });
       return;
@@ -591,13 +591,15 @@ export default function App() {
     setTeachers((prev) => [...prev.filter((item) => item.id !== id), record]);
   };
 
-  const handleSaveStudent = async (input: { id?: string; name: string; matricula: string; groupId: string }) => {
+  const handleSaveStudent = async (input: { id?: string; name: string; matricula: string; email: string; groupId: string }) => {
     if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
     const group = groups.find((item) => item.id === input.groupId && item.schoolId === currentUser.schoolId && item.active !== false);
     if (!group) throw new Error('Selecciona un grupo activo de este plantel.');
     const name = input.name.trim();
     const matricula = input.matricula.trim();
+    const email = input.email.trim().toLowerCase();
     if (!name || !matricula) throw new Error('El nombre y la matrícula son obligatorios.');
+    if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error('El correo electrónico no tiene un formato válido.');
     const id = input.id || `stu-${Date.now()}`;
     const duplicateMatricula = students.find((item) =>
       item.schoolId === currentUser.schoolId
@@ -606,7 +608,7 @@ export default function App() {
     );
     if (duplicateMatricula) throw new Error('La matrícula ya está registrada en este plantel.');
     const existing = students.find((item) => item.id === id);
-    const record: Student = { id, schoolId: currentUser.schoolId, name, matricula, groupId: input.groupId, avatar: existing?.avatar || '', currentStatus: existing?.currentStatus || 'outside_school', currentZone: existing?.currentZone || 'unknown', distanceToCampusMeters: existing?.distanceToCampusMeters || 0, lastUpdated: new Date().toISOString(), active: existing?.active !== false };
+    const record: Student = { id, schoolId: currentUser.schoolId, name, matricula, ...(email ? { email } : {}), groupId: input.groupId, avatar: existing?.avatar || '', currentStatus: existing?.currentStatus || 'outside_school', currentZone: existing?.currentZone || 'unknown', distanceToCampusMeters: existing?.distanceToCampusMeters || 0, lastUpdated: new Date().toISOString(), active: existing?.active !== false };
     const oldGroup = groups.find((item) => item.id === existing?.groupId);
     await syncStudentToCloud(record);
     if (oldGroup && oldGroup.id !== group.id) {
@@ -794,7 +796,7 @@ export default function App() {
   };
 
   // 13. Import students only after Firestore confirms each write.
-  const handleImportStudentsCsv = async (groupId: string, csvData: { name: string; matricula: string }[]) => {
+  const handleImportStudentsCsv = async (groupId: string, csvData: { name: string; matricula: string; email?: string }[]) => {
     if (!currentUser?.schoolId || !['director', 'orientador'].includes(currentUser.role)) {
       throw new Error('Solo dirección u orientación con plantel asignado puede importar alumnos.');
     }
@@ -811,10 +813,11 @@ export default function App() {
       .filter((student) => student.schoolId === currentUser.schoolId)
       .map((student) => student.matricula.trim().toLocaleLowerCase('es-MX')));
     const seen = new Set<string>();
-    const cleanRows = csvData.map((row) => ({ name: row.name.trim(), matricula: row.matricula.trim() }));
+    const cleanRows = csvData.map((row) => ({ name: row.name.trim(), matricula: row.matricula.trim(), email: row.email?.trim().toLowerCase() || '' }));
     for (const row of cleanRows) {
       const key = row.matricula.toLocaleLowerCase('es-MX');
       if (!row.name || !row.matricula) throw new Error('Cada fila debe tener nombre y matrícula.');
+      if (row.email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(row.email)) throw new Error('El correo de ' + row.name + ' no tiene un formato válido.');
       if (seen.has(key)) throw new Error('El archivo contiene matrículas repetidas.');
       if (existingMatriculas.has(key)) throw new Error('La matrícula ' + row.matricula + ' ya está registrada en el plantel.');
       seen.add(key);
@@ -825,6 +828,7 @@ export default function App() {
       id: `stu-csv-${batchId}-${idx}`,
       name: row.name,
       matricula: row.matricula,
+      ...(row.email ? { email: row.email } : {}),
       groupId,
       schoolId: targetGroup.schoolId as string,
       avatar: '',
