@@ -938,16 +938,14 @@ export default function App() {
     const cleanName = name.trim();
     const cleanMatricula = matricula.trim();
     if (!cleanName || !cleanMatricula) {
-      console.warn('La inscripción requiere nombre y matrícula.');
-      return;
+      throw new Error('El nombre y la matrícula son obligatorios.');
     }
     const duplicateMatricula = students.some((student) =>
       student.schoolId === targetGroup.schoolId
       && student.matricula.trim().toLocaleLowerCase('es-MX') === cleanMatricula.toLocaleLowerCase('es-MX')
     );
     if (duplicateMatricula) {
-      console.warn('No se inscribió al alumno: la matrícula ya existe en este plantel.');
-      return;
+      throw new Error('La matrícula ya está registrada en este plantel.');
     }
     const newStudentId = `stu-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const newStudent: Student = {
@@ -971,6 +969,7 @@ export default function App() {
       setGroups((prev) => prev.map((group) => group.id === groupId ? updatedGroup : group));
     } catch (error) {
       console.error('No se pudo completar la inscripción del alumno en Firestore:', error);
+      throw new Error('No se pudo guardar la inscripción en Firestore. Verifica los permisos y vuelve a intentarlo.');
     }
   };
 
