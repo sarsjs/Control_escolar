@@ -36,6 +36,7 @@ import {
   testFirestoreConnection,
   syncStudentToCloud,
   syncStudentAndGroupToCloud,
+  syncStudentEnrollmentToCloud,
   syncStudentsAndGroupToCloud,
   syncAttendanceCorrectionToCloud,
   recordDisputeToCloud,
@@ -603,7 +604,7 @@ export default function App() {
     const matricula = input.matricula.trim();
     const email = input.email.trim().toLowerCase();
     if (!name || !matricula) throw new Error('El nombre y la matrícula son obligatorios.');
-    if (email && !/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(email)) throw new Error('El correo electrónico no tiene un formato válido.');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('El correo electrónico no tiene un formato válido.');
     const id = input.id || `stu-${Date.now()}`;
     const duplicateMatricula = students.find((item) =>
       item.schoolId === currentUser.schoolId
@@ -613,18 +614,23 @@ export default function App() {
     if (duplicateMatricula) throw new Error('La matrícula ya está registrada en este plantel.');
     const existing = students.find((item) => item.id === id);
     const record: Student = { id, schoolId: currentUser.schoolId, name, matricula, ...(email ? { email } : {}), groupId: input.groupId, avatar: existing?.avatar || '', currentStatus: existing?.currentStatus || 'outside_school', currentZone: existing?.currentZone || 'unknown', distanceToCampusMeters: existing?.distanceToCampusMeters || 0, lastUpdated: new Date().toISOString(), active: existing?.active !== false };
-    const oldGroup = groups.find((item) => item.id === existing?.groupId);
-    await syncStudentToCloud(record);
-    if (oldGroup && oldGroup.id !== group.id) {
-      const updatedOld = { ...oldGroup, studentIds: oldGroup.studentIds.filter((studentId) => studentId !== id) };
-      await syncGroupToCloud(updatedOld);
-      setGroups((prev) => prev.map((item) => item.id === updatedOld.id ? updatedOld : item));
-    }
-    if (!group.studentIds.includes(id)) {
-      const updatedGroup = { ...group, studentIds: [...group.studentIds, id] };
-      await syncGroupToCloud(updatedGroup);
-      setGroups((prev) => prev.map((item) => item.id === updatedGroup.id ? updatedGroup : item));
-    }
+    const oldGroup = groups.find((item => item.id === existing?.groupId && item.schoolId === currentUser.schoolId));
+    const updatedOldGroup = oldGroup && oldGroup.id !== group.id
+      ? { ...oldGroup, studentIds: oldGroup.studentIds.filter((studentId) => studentId !== id) }
+      : undefined;
+    const updatedGroup = {
+      ...group,
+      studentIds: [...new Set([
+        ...group.studentIds.filter((studentId) => studentId !== id),
+        id,
+      ])],
+    };
+    await syncStudentEnrollmentToCloud(record, updatedGroup, updatedOldGroup);
+    setGroups((prev) => prev.map((item) => {
+      if (updatedOldGroup && item.id === updatedOldGroup.id) return updatedOldGroup;
+      if (item.id === updatedGroup.id) return updatedGroup;
+      return item;
+    }));
     setStudents((prev) => [...prev.filter((item) => item.id !== id), record]);
   };
 
