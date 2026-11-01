@@ -163,8 +163,8 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
       teacherAvatar: teacher.avatar,
       classroom,
       building: classroom.includes('Lab') ? 'Edificio Ciencias' : 'Edificio A',
-      currentPin: previous?.currentPin || Math.floor(1000 + Math.random() * 9000).toString(),
-      beaconUuid: previous?.beaconUuid || `e2c56db5-dffb-48d2-b060-${Math.random().toString(36).slice(2, 10)}`,
+      currentPin: '',
+      beaconUuid: '',
       color: '#4f46e5',
     };
 
@@ -392,7 +392,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
               <span className="text-2xl font-black font-mono text-emerald-700">{inClassStudents.length}</span>
               <span className="text-xs text-emerald-800">asistencias</span>
             </div>
-            <span className="text-[11px] text-emerald-600 mt-0.5 block">BLE / PIN validado</span>
+            <span className="text-[11px] text-emerald-600 mt-0.5 block">Validación automática pendiente</span>
           </div>
           <CheckCircle2 className="w-8 h-8 text-emerald-400" />
         </div>
