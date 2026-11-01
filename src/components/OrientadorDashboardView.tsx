@@ -36,6 +36,7 @@ interface OrientadorDashboardViewProps {
   onCreateGroup: (name: string, semester: number, turn: 'Matutino' | 'Vespertino') => void;
   onUpdateGroupSchedule: (groupId: string, newSchedule: GroupScheduleItem[]) => void;
   onAddStudentToGroup: (groupId: string, studentName: string, matricula: string) => void;
+  onUpdateStudent: (student: Student) => void;
   onImportStudentsCsv: (groupId: string, csvData: { name: string; matricula: string }[]) => void;
   onSendAlertToStudent: (studentId: string, studentName: string) => void;
   onResolveDispute: (disputeId: string, approved: boolean, notes: string) => void;
@@ -51,6 +52,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   onCreateGroup,
   onUpdateGroupSchedule,
   onAddStudentToGroup,
+  onUpdateStudent,
   onImportStudentsCsv,
   onSendAlertToStudent,
   onResolveDispute,
@@ -99,13 +101,14 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
     setNewGroupLetter('A');
   };
   const groupStudents = allStudents.filter((s) => s.groupId === currentGroup?.id);
+  const activeGroupStudents = groupStudents.filter((s) => s.active !== false);
 
   const myStudents = allStudents.filter((s) =>
     myGroups.some((g) => g.id === s.groupId)
   );
-  const delayedStudents = myStudents.filter((s) => s.currentStatus === 'en_route_delayed');
-  const roamingStudents = myStudents.filter((s) => s.currentStatus === 'on_campus_not_in_class');
-  const inClassStudents = myStudents.filter((s) => s.currentStatus === 'in_class');
+  const delayedStudents = myStudents.filter((s) => s.active !== false &&(s) => s.currentStatus === 'en_route_delayed');
+  const roamingStudents = myStudents.filter((s) => s.active !== false && s.currentStatus === 'on_campus_not_in_class');
+  const inClassStudents = myStudents.filter((s) => s.active !== false && s.currentStatus === 'in_class');
 
   // Filter disputes belonging to my groups
   const myDisputes = disputes.filter((d) =>
@@ -159,6 +162,21 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
     if (!currentGroup || !window.confirm('¿Eliminar esta materia del horario del grupo? Se conservarán los registros históricos de asistencia.')) return;
     const updated = currentGroup.schedule.filter((p) => p.id !== periodId);
     onUpdateGroupSchedule(currentGroup.id, updated);
+  };
+
+  const handleEditStudent = (student: Student) => {
+    const name = window.prompt('Nombre completo del alumno:', student.name);
+    if (name === null) return;
+    const matricula = window.prompt('Matrícula escolar:', student.matricula);
+    if (matricula === null) return;
+    if (!name.trim() || !matricula.trim()) { window.alert('Nombre y matrícula son obligatorios.'); return; }
+    onUpdateStudent({ ...student, name: name.trim(), matricula: matricula.trim(), lastUpdated: new Date().toISOString() });
+  };
+
+  const handleToggleStudent = (student: Student) => {
+    const next = student.active === false;
+    if (!window.confirm(next ? '¿Reactivar a este alumno?' : '¿Dar de baja a este alumno? Se conservará su historial.')) return;
+    onUpdateStudent({ ...student, active: next, lastUpdated: new Date().toISOString() });
   };
 
   const handleCreateStudent = (e: React.FormEvent) => {
@@ -417,7 +435,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {groupStudents.map((st) => {
+                  {activeGroupStudents.map((st) => {
                     const isInClass = st.currentStatus === 'in_class';
                     const isOnCampus = st.currentStatus === 'on_campus_not_in_class';
                     const isDelayed = st.currentStatus === 'en_route_delayed';
@@ -776,7 +794,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
 
             {/* Students List */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {groupStudents.map((st) => (
+              {groupStudents.filter((st) => st.active === false).map((st) => (
                 <div
                   key={st.id}
                   className="bg-white p-3.5 rounded-xl border border-slate-200 flex items-center gap-3 shadow-2xs"
@@ -790,9 +808,11 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                     <h5 className="text-xs font-bold text-slate-900 truncate">{st.name}</h5>
                     <span className="text-[11px] font-mono text-slate-500 block">{st.matricula}</span>
                     <span className="text-[10px] text-slate-400 block truncate">{st.currentZone}</span>
+                    <div className="mt-2 flex gap-2"><button type="button" onClick={() => handleEditStudent(st)} className="text-[10px] font-semibold text-indigo-700">Editar</button><button type="button" onClick={() => handleToggleStudent(st)} className="text-[10px] font-semibold text-rose-700">Dar de baja</button></div>
                   </div>
                 </div>
               ))}
+              {groupStudents.some((st) => st.active === false) && <div className="sm:col-span-2 lg:col-span-3 border-t pt-3"><p className="mb-2 text-xs font-bold text-slate-500">Alumnos dados de baja (historial conservado)</p>{groupStudents.filter((st) => st.active === false).map((st) => <div key={st.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-2 text-xs"><span>{st.name} · {st.matricula}</span><button type="button" onClick={() => handleToggleStudent(st)} className="font-semibold text-emerald-700">Reactivar</button></div>)}</div>}
             </div>
           </div>
         )}
