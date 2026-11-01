@@ -24,7 +24,6 @@ import {
   ShieldAlert,
   FileQuestion,
 } from 'lucide-react';
-import { CampusMap } from './CampusMap';
 
 interface OrientadorDashboardViewProps {
   orientador: Orientador;
@@ -977,10 +976,12 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
         {/* TAB 5: MAPA */}
         {activeTab === 'map' && (
           <div className="p-6">
-            <CampusMap
-              students={groupStudents}
-              currentStudentId={groupStudents[0]?.id || ''}
-            />
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
+              <h3 className="font-bold">Mapa georreferenciado pendiente</h3>
+              <p className="mt-2 leading-relaxed">
+                El mapa real requiere conectar la ubicación GPS del plantel y las verificaciones de los dispositivos. AulaControl no mostrará posiciones simuladas ni ubicaciones inventadas.
+              </p>
+            </div>
           </div>
         )}
       </div>
