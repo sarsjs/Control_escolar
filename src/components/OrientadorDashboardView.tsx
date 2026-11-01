@@ -116,7 +116,8 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
     e.preventDefault();
     if (!currentGroup || !subjectName.trim()) return;
 
-    const teacher = allTeachers.find((t) => t.id === selectedTeacherId) || allTeachers[0];
+    const teacher = allTeachers.find((t) => t.id === selectedTeacherId && t.active !== false) || allTeachers.find((t) => t.active !== false);
+    if (!teacher) { window.alert('Primero registra o activa un docente para asignarlo a la materia.'); return; }
     if (endTime <= startTime) { window.alert('La hora de fin debe ser posterior a la hora de inicio.'); return; }
     const previous = editingPeriodId ? currentGroup.schedule.find((item) => item.id === editingPeriodId) : undefined;
     const newPeriod: GroupScheduleItem = {
@@ -155,7 +156,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   };
 
   const handleDeleteSchedulePeriod = (periodId: string) => {
-    if (!currentGroup) return;
+    if (!currentGroup || !window.confirm('¿Eliminar esta materia del horario del grupo? Se conservarán los registros históricos de asistencia.')) return;
     const updated = currentGroup.schedule.filter((p) => p.id !== periodId);
     onUpdateGroupSchedule(currentGroup.id, updated);
   };
@@ -524,7 +525,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                       onChange={(e) => setSelectedTeacherId(e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white"
                     >
-                      {allTeachers.map((t) => (
+                      {allTeachers.filter((t) => t.active !== false).map((t) => (
                         <option key={t.id} value={t.id}>
                           {t.name} ({t.specialty})
                         </option>
@@ -596,7 +597,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
             )}
 
             <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
-              {currentGroup?.schedule.map((item) => (
+              {(currentGroup?.schedule || []).map((item) => (
                 <div
                   key={item.id}
                   className="p-4 flex flex-wrap items-center justify-between gap-4 hover:bg-slate-50 transition-colors"
