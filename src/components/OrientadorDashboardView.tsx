@@ -106,7 +106,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   const myStudents = allStudents.filter((s) =>
     myGroups.some((g) => g.id === s.groupId)
   );
-  const delayedStudents = myStudents.filter((s) => s.active !== false &&(s) => s.currentStatus === 'en_route_delayed');
+  const delayedStudents = myStudents.filter((s) => s.active !== false && s.currentStatus === 'en_route_delayed');
   const roamingStudents = myStudents.filter((s) => s.active !== false && s.currentStatus === 'on_campus_not_in_class');
   const inClassStudents = myStudents.filter((s) => s.active !== false && s.currentStatus === 'in_class');
 
