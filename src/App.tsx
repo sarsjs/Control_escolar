@@ -782,10 +782,17 @@ export default function App() {
 
   // 12. Orientador enrolls individual student
   const handleAddStudentToGroup = async (groupId: string, name: string, matricula: string) => {
-    const targetGroup = groups.find((group) => group.id === groupId);
+    const targetGroup = groups.find((group) => group.id === groupId && group.active !== false);
     if (!targetGroup?.schoolId || targetGroup.schoolId !== currentUser?.schoolId) {
-      console.error('No se puede inscribir al alumno: el grupo no pertenece al plantel de la sesión.');
-      return;
+      throw new Error('No se puede inscribir: el grupo no está activo o no pertenece al plantel.');
+    }
+    if (currentUser?.role === 'orientador'
+      && targetGroup.orientadorId !== currentOrientadorEntity?.id
+      && targetGroup.temporarySubstituteOrientadorId !== currentOrientadorEntity?.id) {
+      throw new Error('Solo puedes inscribir alumnos en grupos que tienes asignados.');
+    }
+    if (!['director', 'orientador', 'superadmin'].includes(currentUser?.role || '')) {
+      throw new Error('Tu perfil no tiene permiso para inscribir alumnos.');
     }
     const cleanName = name.trim();
     const cleanMatricula = matricula.trim();
@@ -848,9 +855,10 @@ export default function App() {
     }
     const targetGroup = groups.find((group) => group.id === groupId && group.schoolId === currentUser.schoolId && group.active !== false);
     if (!targetGroup) throw new Error('El grupo destino no está activo o no pertenece a este plantel.');
-    if (currentUser.role === 'orientador' && targetGroup.orientadorId !== currentOrientadorEntity?.id &&
-        !currentOrientadorEntity?.assignedGroupIds?.includes(groupId)) {
-      throw new Error('Solo puedes importar alumnos a un grupo asignado a tu cuenta de orientación.');
+    if (currentUser.role === 'orientador'
+      && targetGroup.orientadorId !== currentOrientadorEntity?.id
+      && targetGroup.temporarySubstituteOrientadorId !== currentOrientadorEntity?.id) {
+      throw new Error('Solo puedes importar alumnos a grupos que tienes asignados como responsable o suplente.');
     }
     if (!csvData.length) throw new Error('El archivo no contiene alumnos válidos.');
     if (csvData.length > 450) throw new Error('Importa máximo 450 alumnos por archivo. Divide la lista en archivos más pequeños.');
