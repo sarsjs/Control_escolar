@@ -473,13 +473,15 @@ export default function App() {
     }
 
     const previousStatus = targetStudent.currentStatus;
-    const now = new Date().toISOString();
+    const now = new Date();
+    const localDate = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+    const localValidatedAt = `${localDate}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     const updatedStudent: Student = {
       ...targetStudent,
       currentStatus: newStatus,
       validatedVia: isTeacherManual ? 'teacher_manual' : 'director_correction',
-      validatedAt: now,
-      lastUpdated: now,
+      validatedAt: localValidatedAt,
+      lastUpdated: now.toISOString(),
     };
 
     const newAuditLog: AuditLogEntry = {
