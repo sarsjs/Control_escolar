@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { sendPasswordResetEmail, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { UserAccount, SchoolInstitution, UserRole } from '../types';
-import { INSTITUTION_INFO } from '../data/mockData';
 import { auth, db } from '../firebase';
 import { SchoolBrandLogo } from './SchoolBrandLogo';
 import { AlertCircle, HelpCircle, Eye, EyeOff, X, CheckCircle2 } from 'lucide-react';
@@ -46,7 +45,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, currentSch
   const [recoveryMessage, setRecoveryMessage] = useState('');
   const [isRecovering, setIsRecovering] = useState(false);
 
-  const schoolName = currentSchool?.name || INSTITUTION_INFO.name;
+  const schoolName = currentSchool?.name || 'AulaControl';
   const isEpo = schoolName.toLowerCase().includes('264') || schoolName.toLowerCase().includes('preparatoria');
   const schoolSubtitle = isEpo ? 'Panel Institucional EPO 264' : `Panel Institucional ${schoolName}`;
 
