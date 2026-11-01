@@ -141,7 +141,7 @@ service cloud.firestore {
         || (resource.data.schoolId is string
           && request.resource.data.schoolId == resource.data.schoolId
           && request.resource.data.groupId == resource.data.groupId
-          && canManageAssignedStudent(resource.data.schoolId, resource.data.groupId));
+          && canManageAssignedStudent(resource.data.schoolId, resource.data.groupId))
         || (resource.data.schoolId is string
           && request.resource.data.schoolId == resource.data.schoolId
           && request.resource.data.groupId == resource.data.groupId
