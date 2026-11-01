@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SchoolInstitution, UserAccount } from '../types';
+import { SchoolInstitution, UserAccount, Student, SchoolGroup } from '../types';
 import {
   Building2,
   Plus,
@@ -9,7 +9,6 @@ import {
   UserCheck,
   ShieldCheck,
   Search,
-  ExternalLink,
   Edit3,
   Sliders,
   CheckCircle2,
@@ -26,33 +25,39 @@ import {
 interface SuperAdminDashboardViewProps {
   currentUser: UserAccount;
   schools: SchoolInstitution[];
-  onAddSchool: (school: SchoolInstitution, directorUser: UserAccount) => void;
-  onUpdateSchool: (school: SchoolInstitution) => void;
-  onSwitchToSchoolDirector: (school: SchoolInstitution) => void;
+  students: Student[];
+  groups: SchoolGroup[];
+  onAddSchool: (school: SchoolInstitution) => Promise<void>;
+  onUpdateSchool: (school: SchoolInstitution) => Promise<void>;
+  onProvisionDirector: (schoolId: string) => Promise<void>;
 }
 
 export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = ({
   currentUser,
   schools,
+  students,
+  groups,
   onAddSchool,
   onUpdateSchool,
-  onSwitchToSchoolDirector,
+  onProvisionDirector,
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'trial' | 'suspended'>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [editingSchool, setEditingSchool] = useState<SchoolInstitution | null>(null);
+  const [provisioningSchoolId, setProvisioningSchoolId] = useState<string>('');
+  const [directorAccessFeedback, setDirectorAccessFeedback] = useState<Record<string, { type: 'success' | 'error'; message: string }>>({});
+  const [schoolSaveBusy, setSchoolSaveBusy] = useState(false);
+  const [schoolSaveError, setSchoolSaveError] = useState('');
 
   // Form state for creating new school
   const [formName, setFormName] = useState<string>('');
-  const [formLogo, setFormLogo] = useState<string>(
-    'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=150&auto=format&fit=crop&q=80'
-  );
+  const [formLogo, setFormLogo] = useState<string>('');
   const [formCct, setFormCct] = useState<string>('');
   const [formAddress, setFormAddress] = useState<string>('');
   const [formEntryTime, setFormEntryTime] = useState<string>('07:00 AM');
-  const [formLat, setFormLat] = useState<number>(19.4326);
-  const [formLng, setFormLng] = useState<number>(-99.1332);
+  const [formLat, setFormLat] = useState<number>(0);
+  const [formLng, setFormLng] = useState<number>(0);
   const [formGeofenceRadius, setFormGeofenceRadius] = useState<number>(120);
   const [formPlan, setFormPlan] = useState<'Piloto' | 'Estándar' | 'Enterprise'>('Estándar');
   const [formMaxStudents, setFormMaxStudents] = useState<number>(800);
@@ -61,7 +66,6 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
   const [formDirectorName, setFormDirectorName] = useState<string>('');
   const [formDirectorEmail, setFormDirectorEmail] = useState<string>('');
   const [formDirectorPhone, setFormDirectorPhone] = useState<string>('');
-  const [formDirectorPassword, setFormDirectorPassword] = useState<string>('director123');
 
   // Filtered schools
   const filteredSchools = schools.filter((s) => {
@@ -74,8 +78,15 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     return matchesSearch && matchesStatus;
   });
 
-  const totalStudents = schools.reduce((acc, curr) => acc + curr.enrolledStudentsCount, 0);
+  const totalStudents = students.filter((student) => student.active !== false).length;
   const activeSchoolsCount = schools.filter((s) => s.status === 'active').length;
+  const geofencesConfiguredCount = schools.filter((school) =>
+    Number.isFinite(school.latitude) && Number.isFinite(school.longitude)
+    && school.latitude !== 0 && school.longitude !== 0 && school.geofenceRadiusMeters > 0
+  ).length;
+  const directorsConfiguredCount = schools.filter((school) =>
+    Boolean(school.directorName?.trim() && school.directorEmail?.trim())
+  ).length;
 
   const handleGetCurrentGps = () => {
     if (navigator.geolocation) {
@@ -91,26 +102,30 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     }
   };
 
-  const handleSaveNewSchool = (e: React.FormEvent) => {
+  const handleSaveNewSchool = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName || !formCct || !formDirectorName || !formDirectorEmail) return;
+    setSchoolSaveError('');
+    if (!formName.trim() || !formCct.trim() || !formDirectorName.trim() || !formDirectorEmail.trim()) {
+      setSchoolSaveError('Completa el nombre, CCT y datos del director.');
+      return;
+    }
 
     const newSchoolId = `sch-${Date.now()}`;
     const newSchool: SchoolInstitution = {
       id: newSchoolId,
-      name: formName,
+      name: formName.trim(),
       slug: formName.toLowerCase().replace(/\s+/g, '-').slice(0, 20),
       logo: formLogo,
-      cct: formCct.toUpperCase(),
-      address: formAddress || 'Dirección General de Campus',
+      cct: formCct.toUpperCase().trim(),
+      address: formAddress,
       entryTime: formEntryTime,
       latitude: formLat,
       longitude: formLng,
       geofenceRadiusMeters: formGeofenceRadius,
-      directorName: formDirectorName,
-      directorEmail: formDirectorEmail,
-      directorPhone: formDirectorPhone || '+52 (55) 0000-0000',
-      directorUsername: formDirectorEmail,
+      directorName: formDirectorName.trim(),
+      directorEmail: formDirectorEmail.trim().toLowerCase(),
+      directorPhone: formDirectorPhone,
+      directorUsername: formDirectorEmail.trim().toLowerCase(),
       status: 'active',
       createdAt: new Date().toISOString().split('T')[0],
       subscriptionPlan: formPlan,
@@ -119,21 +134,29 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
       groupsCount: 0,
     };
 
-    const newDirectorUser: UserAccount = {
-      id: `usr-dir-${Date.now()}`,
-      username: formDirectorEmail,
-      password: formDirectorPassword,
-      name: formDirectorName,
-      email: formDirectorEmail,
-      role: 'director',
-      avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
-      title: `Director General · ${formName}`,
-      schoolId: newSchoolId,
-    };
+    setSchoolSaveBusy(true);
+    try {
+      await onAddSchool(newSchool);
+      setIsAddModalOpen(false);
+      resetForm();
+    } catch (error) {
+      setSchoolSaveError(error instanceof Error ? error.message : 'No se pudo guardar el plantel.');
+    } finally {
+      setSchoolSaveBusy(false);
+    }
+  };
 
-    onAddSchool(newSchool, newDirectorUser);
-    setIsAddModalOpen(false);
-    resetForm();
+  const provisionDirectorAccess = async (school: SchoolInstitution) => {
+    setProvisioningSchoolId(school.id);
+    setDirectorAccessFeedback((prev) => ({ ...prev, [school.id]: { type: 'success', message: 'Procesando solicitud…' } }));
+    try {
+      await onProvisionDirector(school.id);
+      setDirectorAccessFeedback((prev) => ({ ...prev, [school.id]: { type: 'success', message: 'Cuenta creada o verificada. Se solicitó el correo para configurar la contraseña.' } }));
+    } catch (error) {
+      setDirectorAccessFeedback((prev) => ({ ...prev, [school.id]: { type: 'error', message: error instanceof Error ? error.message : 'No se pudo crear el acceso.' } }));
+    } finally {
+      setProvisioningSchoolId('');
+    }
   };
 
   const resetForm = () => {
@@ -145,11 +168,19 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     setFormDirectorPhone('');
   };
 
-  const handleSaveEditedSchool = (e: React.FormEvent) => {
+  const handleSaveEditedSchool = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSchool) return;
-    onUpdateSchool(editingSchool);
-    setEditingSchool(null);
+    setSchoolSaveError('');
+    setSchoolSaveBusy(true);
+    try {
+      await onUpdateSchool(editingSchool);
+      setEditingSchool(null);
+    } catch (error) {
+      setSchoolSaveError(error instanceof Error ? error.message : 'No se pudieron guardar los cambios.');
+    } finally {
+      setSchoolSaveBusy(false);
+    }
   };
 
   return (
@@ -227,10 +258,10 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <Radio className="w-4 h-4 text-blue-600" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-slate-900 font-mono">{schools.length}</span>
-            <span className="text-xs text-blue-600 font-semibold">100% calibradas</span>
+            <span className="text-3xl font-black text-slate-900 font-mono">{geofencesConfiguredCount}</span>
+            <span className="text-xs text-blue-600 font-semibold">configuradas</span>
           </div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Perímetros satelitales escolares</span>
+          <span className="text-[11px] text-slate-400 mt-1 block">Planteles con coordenadas y radio definidos</span>
         </div>
 
         {/* KPI 4 */}
@@ -240,10 +271,10 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <UserCheck className="w-4 h-4 text-purple-600" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-slate-900 font-mono">{schools.length}</span>
-            <span className="text-xs text-purple-600 font-semibold">Cuentas creadas</span>
+            <span className="text-3xl font-black text-slate-900 font-mono">{directorsConfiguredCount}</span>
+            <span className="text-xs text-purple-600 font-semibold">datos registrados</span>
           </div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Autoridades autónomas</span>
+          <span className="text-[11px] text-slate-400 mt-1 block">El acceso se crea y envía desde cada plantel</span>
         </div>
       </div>
 
@@ -396,19 +427,33 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
 
                 <div className="text-right">
                   <span className="text-[10px] text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded-md font-mono">
-                    Acceso: {school.directorUsername}
+                    Correo del director: {school.directorEmail}
                   </span>
                 </div>
               </div>
             </div>
 
+            {directorAccessFeedback[school.id] && (
+              <p role={directorAccessFeedback[school.id].type === 'error' ? 'alert' : 'status'}
+                className={`px-6 pb-2 text-xs ${directorAccessFeedback[school.id].type === 'error' ? 'text-rose-700' : 'text-emerald-700'}`}>
+                {directorAccessFeedback[school.id].message}
+              </p>
+            )}
             {/* Card Footer Actions */}
             <div className="p-4 bg-slate-50/50 flex items-center justify-between gap-3 text-xs">
               <span className="text-[11px] text-slate-500">
-                Alumnos: <strong className="text-slate-800">{school.enrolledStudentsCount}</strong> / {school.maxStudents}
+                Alumnos: <strong className="text-slate-800">{students.filter((student) => student.schoolId === school.id && student.active !== false).length}</strong> / {school.maxStudents} · Grupos: <strong className="text-slate-800">{groups.filter((group) => group.schoolId === school.id && group.active !== false).length}</strong>
               </span>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void provisionDirectorAccess(school)}
+                  disabled={provisioningSchoolId === school.id || school.status === 'suspended' || !school.directorName?.trim() || !school.directorEmail?.trim()}
+                  className="px-3 py-1.5 rounded-xl border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-semibold transition-colors disabled:opacity-50"
+                >
+                  {provisioningSchoolId === school.id ? 'Procesando…' : 'Crear / reenviar acceso del director'}
+                </button>
                 <button
                   type="button"
                   onClick={() => setEditingSchool(school)}
@@ -416,15 +461,6 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                 >
                   <Edit3 className="w-3.5 h-3.5" />
                   <span>Ajustar Cerca / Datos</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onSwitchToSchoolDirector(school)}
-                  className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-xs flex items-center gap-1.5"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Entrar como Director</span>
                 </button>
               </div>
             </div>
@@ -455,6 +491,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             </div>
 
             <form onSubmit={handleSaveNewSchool} className="p-6 space-y-5 overflow-y-auto flex-1 text-xs">
+              {schoolSaveError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{schoolSaveError}</p>}
               {/* Sección 1: Datos Generales */}
               <div className="space-y-3">
                 <h4 className="font-bold text-slate-900 border-b border-slate-200 pb-1.5 text-xs uppercase tracking-wider text-indigo-700">
@@ -661,22 +698,12 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                       type="text"
                       value={formDirectorPhone}
                       onChange={(e) => setFormDirectorPhone(e.target.value)}
-                      placeholder="+52 (55) 4321-9876"
+                      placeholder="Teléfono del plantel o director"
                       className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl font-mono"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Contraseña Temporal
-                    </label>
-                    <input
-                      type="text"
-                      value={formDirectorPassword}
-                      onChange={(e) => setFormDirectorPassword(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl font-mono text-xs"
-                    />
-                  </div>
+
                 </div>
               </div>
 
@@ -691,9 +718,10 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98]"
+                  disabled={schoolSaveBusy}
+                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98] disabled:opacity-50"
                 >
-                  Guardar Escuela y Crear Director
+                  {schoolSaveBusy ? 'Guardando…' : 'Guardar plantel'}
                 </button>
               </div>
             </form>
@@ -722,6 +750,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             </div>
 
             <form onSubmit={handleSaveEditedSchool} className="p-6 space-y-4 text-xs">
+              {schoolSaveError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{schoolSaveError}</p>}
               <div className="space-y-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
@@ -861,9 +890,10 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98]"
+                  disabled={schoolSaveBusy}
+                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98] disabled:opacity-50"
                 >
-                  Actualizar Parámetros
+                  {schoolSaveBusy ? 'Guardando…' : 'Actualizar Parámetros'}
                 </button>
               </div>
             </form>

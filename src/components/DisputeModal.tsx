@@ -9,7 +9,7 @@ interface DisputeModalProps {
   studentId: string;
   groupId: string;
   activeSubjectName: string;
-  onSubmitDispute: (reason: string) => void;
+  onSubmitDispute: (reason: string) => void | Promise<void>;
 }
 
 export const DisputeModal: React.FC<DisputeModalProps> = ({
@@ -22,24 +22,30 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
   const [reason, setReason] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [success, setSuccess] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reason.trim()) return;
+    if (!reason.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      onSubmitDispute(reason);
-      setIsSubmitting(false);
+    setErrorMessage('');
+    try {
+      await onSubmitDispute(reason.trim());
       setSuccess(true);
-      setTimeout(() => {
+      window.setTimeout(() => {
         setSuccess(false);
         setReason('');
         onClose();
       }, 1500);
-    }, 400);
+    } catch (error) {
+      console.error('No se pudo guardar la solicitud de revisión:', error);
+      setErrorMessage('No se pudo guardar la solicitud. No se ha confirmado el envío; inténtalo más tarde o informa a Orientación.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -72,6 +78,8 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {errorMessage && <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800">{errorMessage}</div>}
+
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900">
               Si estuviste presente y el sistema no detectó tu dispositivo BLE o hubo una falla de red, describe la situación para que tu Orientador y Profesor auditen y corrijan el registro.
             </div>

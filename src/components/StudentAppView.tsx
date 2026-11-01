@@ -22,7 +22,6 @@ interface StudentAppViewProps {
   onOpenEtaModal: () => void;
   onOpenCheckinModal: () => void;
   onOpenDisputeModal: () => void;
-  onSimulateCrossGate: () => void;
 }
 
 export const StudentAppView: React.FC<StudentAppViewProps> = ({
@@ -34,7 +33,6 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
   onOpenEtaModal,
   onOpenCheckinModal,
   onOpenDisputeModal,
-  onSimulateCrossGate,
 }) => {
   const [showIdCard, setShowIdCard] = useState<boolean>(false);
 
@@ -99,10 +97,9 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Tus Asistencias</span>
             <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-2xl font-black font-mono text-emerald-600">94.1%</span>
-              <span className="text-xs text-slate-500 font-medium">(32/34)</span>
+              <span className="text-sm font-bold text-slate-700">Sin historial</span>
             </div>
-            <span className="text-[10px] text-emerald-700 font-medium block mt-0.5">Asistencias validadas</span>
+            <span className="text-[10px] text-slate-500 font-medium block mt-0.5">Historial aún no disponible</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
             <CheckCircle2 className="w-5 h-5" />
@@ -114,10 +111,9 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-rose-800">Tus Faltas</span>
             <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-2xl font-black font-mono text-rose-600">2</span>
-              <span className="text-xs text-slate-500 font-medium">acumuladas</span>
+              <span className="text-sm font-bold text-slate-700">Sin historial</span>
             </div>
-            <span className="text-[10px] text-slate-500 block mt-0.5">1 justificada · 1 por revisar</span>
+            <span className="text-[10px] text-slate-500 block mt-0.5">No hay registros de faltas cargados</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
             <AlertTriangle className="w-5 h-5" />
@@ -130,7 +126,7 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
             <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-800">Horario de Hoy</span>
             <div className="flex items-baseline gap-1.5 mt-1">
               <span className="text-base font-bold text-slate-900 truncate max-w-[130px] block">
-                {activeClass?.subjectName || 'Matemáticas'}
+                {activeClass?.subjectName || 'Sin materia asignada'}
               </span>
             </div>
             <span className="text-[10px] text-indigo-700 font-mono block mt-0.5">
@@ -175,12 +171,12 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
           <div className="flex items-center justify-between border-b border-white/10 pb-4">
             <div>
               <span className="text-[10px] font-mono tracking-widest uppercase text-indigo-300">
-                Colegio Preparatorio Central
+                Plantel sin configurar
               </span>
               <h3 className="text-sm font-bold tracking-tight">Credencial Digital del Alumno</h3>
             </div>
             <div className="px-2.5 py-1 rounded-md bg-white/10 text-[11px] font-mono text-indigo-200">
-              Ciclo 2026-2027
+              Ciclo escolar por configurar
             </div>
           </div>
 
@@ -241,7 +237,7 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
                 Aún no registramos tu llegada al plantel
               </h3>
               <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                Hora de entrada oficial: <strong className="text-slate-800">07:00 AM</strong>. Tu clase en curso para {studentGroup.name} es <strong className="text-slate-800">{activeClass?.subjectName}</strong> con <strong className="text-slate-800">{activeClass?.teacherName}</strong> en <strong className="text-slate-800">{activeClass?.classroom}</strong>.
+                Horario de entrada institucional: <strong className="text-slate-800">por configurar</strong>. Tu clase en curso para {studentGroup.name} es <strong className="text-slate-800">{activeClass?.subjectName}</strong> con <strong className="text-slate-800">{activeClass?.teacherName}</strong> en <strong className="text-slate-800">{activeClass?.classroom}</strong>.
               </p>
             </div>
           </div>
@@ -250,7 +246,7 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
             <div className="text-xs text-slate-700">
               <strong className="block text-slate-900 font-semibold">¿En cuánto tiempo estimas llegar?</strong>
               <span className="text-slate-500 text-[11px]">
-                Tu reporte se enviará de inmediato a tu Orientador y al Profesor de tu materia activa.
+                El reporte de llegada estará disponible cuando se conecte el servicio seguro de avisos.
               </span>
             </div>
 
@@ -305,13 +301,9 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
               >
                 Actualizar Minutos
               </button>
-              <button
-                type="button"
-                onClick={onSimulateCrossGate}
-                className="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-all shadow-xs"
-              >
-                Registrar Llegada al Perímetro Escolar
-              </button>
+              <span className="max-w-xs text-[11px] text-slate-600">
+                La llegada al plantel se mostrará cuando exista una verificación real de ubicación; no se puede registrar manualmente desde esta pantalla.
+              </span>
             </div>
           </div>
         </div>
@@ -327,17 +319,17 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-amber-800">
-                  Llegada al Plantel Detectada
+                  Registro de presencia en plantel
                 </span>
                 <span className="text-[11px] font-mono text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-bold">
-                  En Perímetro Escolar
+                  GPS automático pendiente
                 </span>
               </div>
               <h3 className="text-lg font-bold text-slate-900 mt-0.5">
-                Has llegado al plantel. Recuerda que todavía necesitas confirmar tu presencia en tu salón de clase
+                El registro actual indica presencia en el plantel. Todavía falta confirmar tu presencia en el salón de clase
               </h3>
               <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                El perímetro escolar confirma tu presencia física en las instalaciones. Sin embargo, tu clase de <strong className="text-slate-800">{activeClass?.subjectName}</strong> en <strong className="text-slate-800">{activeClass?.classroom}</strong> ya inició. La llegada al plantel no te marca automáticamente como asistente.
+                Este estado aún no está respaldado por una verificación GPS automática. Tu clase de <strong className="text-slate-800">{activeClass?.subjectName}</strong> en <strong className="text-slate-800">{activeClass?.classroom}</strong> ya inició. La llegada al plantel no te marca automáticamente como asistente.
               </p>
             </div>
           </div>
@@ -358,7 +350,7 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
               className="w-full mt-2 inline-flex items-center justify-center gap-2 py-3.5 px-4 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] rounded-xl shadow-md transition-all"
             >
               <Radio className="w-4 h-4" />
-              <span>Confirmar Presencia en {activeClass?.classroom} (BLE Automático)</span>
+              <span>Consultar validación de asistencia en {activeClass?.classroom}</span>
             </button>
           </div>
         </div>
@@ -377,7 +369,7 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
                   Presencia en Clase Confirmada
                 </span>
                 <span className="text-[11px] font-mono text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                  Validado por {student.validatedVia?.toUpperCase() || 'BLE_AUTO'}
+                  Método: {student.validatedVia?.toUpperCase() || 'Sin método registrado'}
                 </span>
               </div>
               <h3 className="text-lg font-bold text-slate-900 mt-0.5">

@@ -24,7 +24,6 @@ import {
   ShieldAlert,
   FileQuestion,
 } from 'lucide-react';
-import { CampusMap } from './CampusMap';
 
 interface OrientadorDashboardViewProps {
   orientador: Orientador;
@@ -33,10 +32,11 @@ interface OrientadorDashboardViewProps {
   allTeachers: Teacher[];
   disputes: AttendanceDispute[];
   simulatedTime: string;
-  onUpdateGroupSchedule: (groupId: string, newSchedule: GroupScheduleItem[]) => void;
-  onAddStudentToGroup: (groupId: string, studentName: string, matricula: string) => void;
-  onImportStudentsCsv: (groupId: string, csvData: { name: string; matricula: string }[]) => void;
-  onSendAlertToStudent: (studentId: string, studentName: string) => void;
+  onCreateGroup: (name: string, semester: number, turn: 'Matutino' | 'Vespertino') => Promise<void>;
+  onUpdateGroupSchedule: (groupId: string, newSchedule: GroupScheduleItem[]) => Promise<void>;
+  onAddStudentToGroup: (groupId: string, studentName: string, matricula: string) => Promise<void>;
+  onUpdateStudent: (student: Student) => void;
+  onImportStudentsCsv: (groupId: string, csvData: { name: string; matricula: string; email?: string }[]) => Promise<void>;
   onResolveDispute: (disputeId: string, approved: boolean, notes: string) => void;
 }
 
@@ -47,64 +47,115 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   allTeachers,
   disputes,
   simulatedTime,
+  onCreateGroup,
   onUpdateGroupSchedule,
   onAddStudentToGroup,
+  onUpdateStudent,
   onImportStudentsCsv,
-  onSendAlertToStudent,
   onResolveDispute,
 }) => {
   // Only groups assigned to this orientador (or where they are substitute)
   const myGroups = allGroups.filter(
-    (g) => g.orientadorId === orientador.id || g.temporarySubstituteOrientadorId === orientador.id
+    (group) => group.active !== false
+      && (group.orientadorId === orientador.id || group.temporarySubstituteOrientadorId === orientador.id)
+  );
+  // Never offer teachers from another school or inactive teacher records.
+  const activeTeachers = allTeachers.filter(
+    (teacher) => teacher.schoolId === orientador.schoolId && teacher.active !== false
   );
   const [selectedGroupId, setSelectedGroupId] = useState<string>(
-    myGroups[0]?.id || allGroups[0]?.id || ''
+    myGroups[0]?.id || ''
   );
   const [activeTab, setActiveTab] = useState<'attendance' | 'schedule' | 'students' | 'disputes' | 'map'>('attendance');
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [newGroupSemester, setNewGroupSemester] = useState('1');
+  const [newGroupLetter, setNewGroupLetter] = useState('A');
+  const [newGroupTurn, setNewGroupTurn] = useState<'Matutino' | 'Vespertino'>('Matutino');
+  const [groupCreateError, setGroupCreateError] = useState('');
+  const [groupCreateBusy, setGroupCreateBusy] = useState(false);
+  const [scheduleSaveError, setScheduleSaveError] = useState('');
+  const [scheduleSaveBusy, setScheduleSaveBusy] = useState(false);
 
   // Modals
   const [isAddPeriodOpen, setIsAddPeriodOpen] = useState<boolean>(false);
+  const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [subjectName, setSubjectName] = useState<string>('');
-  const [startTime, setStartTime] = useState<string>('13:35');
-  const [endTime, setEndTime] = useState<string>('15:00');
+  const [startTime, setStartTime] = useState<string>('');
+  const [endTime, setEndTime] = useState<string>('');
   const [toleranceMinutes, setToleranceMinutes] = useState<number>(10);
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(allTeachers[0]?.id || '');
-  const [classroom, setClassroom] = useState<string>('Aula 105');
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(activeTeachers[0]?.id || '');
+  const [classroom, setClassroom] = useState<string>('');
 
   // Add student
   const [isAddStudentOpen, setIsAddStudentOpen] = useState<boolean>(false);
   const [newStudentName, setNewStudentName] = useState<string>('');
   const [newStudentMatricula, setNewStudentMatricula] = useState<string>('');
+  const [newStudentError, setNewStudentError] = useState<string>('');
+  const [newStudentBusy, setNewStudentBusy] = useState(false);
 
   // CSV import
   const [isCsvModalOpen, setIsCsvModalOpen] = useState<boolean>(false);
-  const [csvRawText, setCsvRawText] = useState<string>(
-    'Emiliano Vargas Sánchez,2026-B-0910\nValeria Castro Pineda,2026-B-0911\nLuis Fernando Mora,2026-B-0912'
-  );
+  const [csvRawText, setCsvRawText] = useState<string>('');
   const [csvSuccessMessage, setCsvSuccessMessage] = useState<string>('');
+  const [csvErrorMessage, setCsvErrorMessage] = useState<string>('');
+  const [csvImportBusy, setCsvImportBusy] = useState(false);
 
   const currentGroup = myGroups.find((g) => g.id === selectedGroupId) || myGroups[0];
+
+  const handleCreateGroup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setGroupCreateError('');
+    const semester = Number(newGroupSemester);
+    if (!Number.isInteger(semester) || semester < 1 || semester > 12 || !newGroupLetter.trim()) {
+      setGroupCreateError('Selecciona un semestre válido y escribe la letra del grupo.');
+      return;
+    }
+    setGroupCreateBusy(true);
+    try {
+      await onCreateGroup(`${semester}º Semestre · Grupo ${newGroupLetter.trim().toUpperCase()}`, semester, newGroupTurn);
+      setIsCreateGroupOpen(false);
+      setNewGroupLetter('A');
+    } catch (error) {
+      setGroupCreateError(error instanceof Error ? error.message : 'No se pudo guardar el grupo.');
+    } finally {
+      setGroupCreateBusy(false);
+    }
+  };
   const groupStudents = allStudents.filter((s) => s.groupId === currentGroup?.id);
+  const activeGroupStudents = groupStudents.filter((s) => s.active !== false);
 
   const myStudents = allStudents.filter((s) =>
     myGroups.some((g) => g.id === s.groupId)
   );
-  const delayedStudents = myStudents.filter((s) => s.currentStatus === 'en_route_delayed');
-  const roamingStudents = myStudents.filter((s) => s.currentStatus === 'on_campus_not_in_class');
-  const inClassStudents = myStudents.filter((s) => s.currentStatus === 'in_class');
+  const delayedStudents = myStudents.filter((s) => s.active !== false && s.currentStatus === 'en_route_delayed');
+  const roamingStudents = myStudents.filter((s) => s.active !== false && s.currentStatus === 'on_campus_not_in_class');
+  const inClassStudents = myStudents.filter((s) => s.active !== false && s.currentStatus === 'in_class');
 
   // Filter disputes belonging to my groups
   const myDisputes = disputes.filter((d) =>
     myGroups.some((g) => g.id === d.groupId)
   );
 
-  const handleAddSchedulePeriod = (e: React.FormEvent) => {
+  const handleAddSchedulePeriod = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentGroup || !subjectName.trim()) return;
+    setScheduleSaveError('');
+    if (!currentGroup || !subjectName.trim()) {
+      setScheduleSaveError('Selecciona un grupo y escribe el nombre de la materia.');
+      return;
+    }
 
-    const teacher = allTeachers.find((t) => t.id === selectedTeacherId) || allTeachers[0];
+    const teacher = activeTeachers.find((t) => t.id === selectedTeacherId);
+    if (!teacher) {
+      window.alert(activeTeachers.length
+        ? 'Selecciona un docente activo de este plantel.'
+        : 'No hay docentes activos registrados en este plantel. Solicita a Dirección que registre o active uno.');
+      return;
+    }
+    if (!startTime || !endTime || endTime <= startTime || !classroom.trim()) { setScheduleSaveError('Revisa las horas y el salón; la hora final debe ser posterior a la inicial.'); return; }
+    const previous = editingPeriodId ? currentGroup.schedule.find((item) => item.id === editingPeriodId) : undefined;
     const newPeriod: GroupScheduleItem = {
-      id: `sch-${Date.now()}`,
+      ...(previous || {} as GroupScheduleItem),
+      id: previous?.id || `sch-${Date.now()}`,
       dayOfWeek: 'Lunes a Viernes',
       startTime,
       endTime,
@@ -116,60 +167,164 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
       teacherAvatar: teacher.avatar,
       classroom,
       building: classroom.includes('Lab') ? 'Edificio Ciencias' : 'Edificio A',
-      currentPin: Math.floor(1000 + Math.random() * 9000).toString(),
-      beaconUuid: `e2c56db5-dffb-48d2-b060-${Math.random().toString(36).slice(2, 10)}`,
+      currentPin: '',
+      beaconUuid: '',
       color: '#4f46e5',
     };
 
-    const updated = [...currentGroup.schedule, newPeriod];
-    onUpdateGroupSchedule(currentGroup.id, updated);
-    setIsAddPeriodOpen(false);
-    setSubjectName('');
+    const updated = previous
+      ? currentGroup.schedule.map((item) => item.id === editingPeriodId ? newPeriod : item)
+      : [...currentGroup.schedule, newPeriod];
+    setScheduleSaveBusy(true);
+    try {
+      await onUpdateGroupSchedule(currentGroup.id, updated);
+      setIsAddPeriodOpen(false);
+      setEditingPeriodId(null);
+      setSubjectName('');
+      setStartTime(''); setEndTime(''); setClassroom('');
+    } catch (error) {
+      setScheduleSaveError(error instanceof Error ? error.message : 'No se pudo guardar el horario.');
+    } finally {
+      setScheduleSaveBusy(false);
+    }
+  };
+
+  const handleEditSchedulePeriod = (period: GroupScheduleItem) => {
+    setEditingPeriodId(period.id); setSubjectName(period.subjectName); setStartTime(period.startTime);
+    setEndTime(period.endTime); setToleranceMinutes(period.toleranceMinutes || 10);
+    setSelectedTeacherId(period.teacherId); setClassroom(period.classroom); setIsAddPeriodOpen(true);
   };
 
   const handleDeleteSchedulePeriod = (periodId: string) => {
-    if (!currentGroup) return;
+    if (!currentGroup || !window.confirm('¿Eliminar esta materia del horario del grupo? Se conservarán los registros históricos de asistencia.')) return;
     const updated = currentGroup.schedule.filter((p) => p.id !== periodId);
     onUpdateGroupSchedule(currentGroup.id, updated);
   };
 
-  const handleCreateStudent = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentGroup || !newStudentName.trim() || !newStudentMatricula.trim()) return;
-    onAddStudentToGroup(currentGroup.id, newStudentName, newStudentMatricula);
-    setNewStudentName('');
-    setNewStudentMatricula('');
-    setIsAddStudentOpen(false);
+  const handleEditStudent = (student: Student) => {
+    const name = window.prompt('Nombre completo del alumno:', student.name);
+    if (name === null) return;
+    const matricula = window.prompt('Matrícula escolar:', student.matricula);
+    if (matricula === null) return;
+    if (!name.trim() || !matricula.trim()) { window.alert('Nombre y matrícula son obligatorios.'); return; }
+    onUpdateStudent({ ...student, name: name.trim(), matricula: matricula.trim(), lastUpdated: new Date().toISOString() });
   };
 
-  const handleProcessCsvImport = (e: React.FormEvent) => {
+  const handleToggleStudent = (student: Student) => {
+    const next = student.active === false;
+    if (!window.confirm(next ? '¿Reactivar a este alumno?' : '¿Dar de baja a este alumno? Se conservará su historial.')) return;
+    onUpdateStudent({ ...student, active: next, lastUpdated: new Date().toISOString() });
+  };
+
+  const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentGroup || !csvRawText.trim()) return;
+    setNewStudentError('');
+    if (!currentGroup || !newStudentName.trim() || !newStudentMatricula.trim()) {
+      setNewStudentError('El nombre y la matrícula son obligatorios.');
+      return;
+    }
+    setNewStudentBusy(true);
+    try {
+      await onAddStudentToGroup(currentGroup.id, newStudentName, newStudentMatricula);
+      setNewStudentName('');
+      setNewStudentMatricula('');
+      setIsAddStudentOpen(false);
+    } catch (error) {
+      setNewStudentError(error instanceof Error ? error.message : 'No se pudo guardar la inscripción.');
+    } finally {
+      setNewStudentBusy(false);
+    }
+  };
 
-    const lines = csvRawText.trim().split('\n');
-    const parsed: { name: string; matricula: string }[] = [];
-
-    for (const line of lines) {
-      const parts = line.split(',');
-      if (parts.length >= 2) {
-        parsed.push({
-          name: parts[0].trim(),
-          matricula: parts[1].trim(),
-        });
-      }
+  const handleProcessCsvImport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCsvErrorMessage('');
+    setCsvSuccessMessage('');
+    if (!currentGroup || !csvRawText.trim()) {
+      setCsvErrorMessage('Selecciona un grupo y pega la lista de alumnos.');
+      return;
     }
 
-    if (parsed.length > 0) {
-      onImportStudentsCsv(currentGroup.id, parsed);
-      setCsvSuccessMessage(`Se importaron ${parsed.length} alumnos con éxito.`);
-      setTimeout(() => {
-        setCsvSuccessMessage('');
-        setIsCsvModalOpen(false);
-      }, 1500);
+    const lines = csvRawText.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim());
+    const parsed: { name: string; matricula: string }[] = [];
+    const seen = new Set<string>();
+    const existingMatriculas = new Set(allStudents
+      .filter((student) => student.schoolId === orientador.schoolId)
+      .map((student) => student.matricula.trim().toLocaleLowerCase('es-MX')));
+    const errors: string[] = [];
+
+    lines.forEach((line, index) => {
+      const parts = line.split(',').map((part) => part.trim().replace(/^"|"$/g, ''));
+      const headerName = (parts[0] || '').toLocaleLowerCase('es-MX');
+      const headerMatricula = (parts[1] || '').toLocaleLowerCase('es-MX');
+      if (index === 0 && ['nombre', 'nombre completo', 'nombres'].includes(headerName) && ['matricula', 'matrícula'].includes(headerMatricula)) return;
+      const name = parts[0] || '';
+      const matricula = parts[1] || '';
+      if (!name || !matricula) {
+        errors.push('Fila ' + (index + 1) + ': se requieren nombre y matrícula separados por coma.');
+        return;
+      }
+      const key = matricula.toLocaleLowerCase('es-MX');
+      if (seen.has(key)) errors.push('Fila ' + (index + 1) + ': matrícula repetida en el archivo (' + matricula + ').');
+      else if (existingMatriculas.has(key)) errors.push('Fila ' + (index + 1) + ': la matrícula ' + matricula + ' ya existe en el plantel.');
+      else {
+        seen.add(key);
+        parsed.push({ name, matricula });
+      }
+    });
+
+    if (parsed.length > 450) errors.push('El archivo supera el máximo de 450 alumnos por lote.');
+    if (errors.length) {
+      setCsvErrorMessage(errors.slice(0, 8).join(' '));
+      return;
+    }
+    if (!parsed.length) {
+      setCsvErrorMessage('No se encontraron alumnos válidos para importar.');
+      return;
+    }
+
+    setCsvImportBusy(true);
+    try {
+      await onImportStudentsCsv(currentGroup.id, parsed);
+      setCsvSuccessMessage('Firestore confirmó la inscripción de ' + parsed.length + ' alumno(s).');
+      setCsvRawText('');
+    } catch (error) {
+      setCsvErrorMessage(error instanceof Error ? error.message : 'No se pudo completar la importación.');
+    } finally {
+      setCsvImportBusy(false);
     }
   };
 
   return (
+    <>
+      {isCreateGroupOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+          <form onSubmit={handleCreateGroup} className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+            {groupCreateError && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{groupCreateError}</p>}
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Crear grupo escolar</h2>
+              <p className="mt-1 text-sm text-slate-600">El grupo se guardará sin alumnos ni horario; esos datos se agregan después.</p>
+            </div>
+            <label className="block text-sm font-medium text-slate-700">Semestre
+              <select required value={newGroupSemester} onChange={(e) => setNewGroupSemester(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2.5">
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((semester) => <option key={semester} value={semester}>{semester}º semestre</option>)}
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-slate-700">Letra del grupo
+              <input required maxLength={5} value={newGroupLetter} onChange={(e) => setNewGroupLetter(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 p-2.5" placeholder="A" />
+            </label>
+            <label className="block text-sm font-medium text-slate-700">Turno
+              <select value={newGroupTurn} onChange={(e) => setNewGroupTurn(e.target.value as 'Matutino' | 'Vespertino')} className="mt-1 w-full rounded-lg border border-slate-300 p-2.5">
+                <option value="Matutino">Matutino</option><option value="Vespertino">Vespertino</option>
+              </select>
+            </label>
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={() => setIsCreateGroupOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button>
+              <button type="submit" disabled={groupCreateBusy} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{groupCreateBusy ? 'Guardando…' : 'Crear grupo'}</button>
+            </div>
+          </form>
+        </div>
+      )}
     <div className="space-y-6">
       {/* Top Banner: Orientador Identity */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-wrap items-center justify-between gap-6">
@@ -196,7 +351,11 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
         {/* Group Selector Dropdown */}
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-500 font-semibold">Grupo activo:</span>
-          <select
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={() => setIsCreateGroupOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+              <Plus size={16} /> Crear grupo
+            </button>
+            <select
             value={selectedGroupId}
             onChange={(e) => setSelectedGroupId(e.target.value)}
             className="text-xs font-bold bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-hidden"
@@ -206,7 +365,8 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                 {g.name} ({g.studentIds.length} alumnos)
               </option>
             ))}
-          </select>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -243,7 +403,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
               <span className="text-2xl font-black font-mono text-emerald-700">{inClassStudents.length}</span>
               <span className="text-xs text-emerald-800">asistencias</span>
             </div>
-            <span className="text-[11px] text-emerald-600 mt-0.5 block">BLE / PIN validado</span>
+            <span className="text-[11px] text-emerald-600 mt-0.5 block">Validación automática pendiente</span>
           </div>
           <CheckCircle2 className="w-8 h-8 text-emerald-400" />
         </div>
@@ -331,13 +491,9 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                       <span className="font-semibold text-slate-900">
                         {st.name} — Ubicación detectada: {st.currentZone}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => onSendAlertToStudent(st.id, st.name)}
-                        className="text-[11px] font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded-md transition-colors"
-                      >
-                        Enviar Alerta al Teléfono
-                      </button>
+                      <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-md">
+                        Aviso al teléfono pendiente de integración
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -356,7 +512,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {groupStudents.map((st) => {
+                  {activeGroupStudents.map((st) => {
                     const isInClass = st.currentStatus === 'in_class';
                     const isOnCampus = st.currentStatus === 'on_campus_not_in_class';
                     const isDelayed = st.currentStatus === 'en_route_delayed';
@@ -431,7 +587,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
 
               <button
                 type="button"
-                onClick={() => setIsAddPeriodOpen(true)}
+                onClick={() => { setEditingPeriodId(null); setSubjectName(''); setStartTime(''); setEndTime(''); setClassroom(''); setIsAddPeriodOpen(true); }}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-all shadow-xs"
               >
                 <Plus className="w-4 h-4" />
@@ -442,9 +598,10 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
             {isAddPeriodOpen && (
               <div className="p-5 bg-slate-50 border border-slate-300 rounded-2xl space-y-4">
                 <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  Programar Nueva Materia en el Horario
+                  {editingPeriodId ? 'Editar Materia del Horario' : 'Programar Nueva Materia en el Horario'}
                 </h4>
                 <form onSubmit={handleAddSchedulePeriod} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+                  {scheduleSaveError && <p role="alert" className="sm:col-span-2 lg:col-span-5 rounded-lg bg-rose-50 p-3 text-rose-700">{scheduleSaveError}</p>}
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">Nombre de la Materia</label>
                     <input
@@ -460,15 +617,19 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">Docente Asignado</label>
                     <select
+                      required
                       value={selectedTeacherId}
                       onChange={(e) => setSelectedTeacherId(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white"
+                      disabled={activeTeachers.length === 0}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white disabled:bg-slate-100"
                     >
-                      {allTeachers.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} ({t.specialty})
-                        </option>
-                      ))}
+                      {activeTeachers.length === 0
+                        ? <option value="">Sin docentes activos disponibles</option>
+                        : activeTeachers.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.specialty})
+                          </option>
+                        ))}
                     </select>
                   </div>
 
@@ -519,16 +680,17 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                   <div className="sm:col-span-2 lg:col-span-5 flex justify-end gap-2 pt-2">
                     <button
                       type="button"
-                      onClick={() => setIsAddPeriodOpen(false)}
+                      onClick={() => { setIsAddPeriodOpen(false); setEditingPeriodId(null); }}
                       className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg"
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs"
+                      disabled={activeTeachers.length === 0}
+                      className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Guardar en el Horario
+                      {editingPeriodId ? 'Guardar cambios' : 'Guardar en el Horario'}
                     </button>
                   </div>
                 </form>
@@ -536,7 +698,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
             )}
 
             <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
-              {currentGroup?.schedule.map((item) => (
+              {(currentGroup?.schedule || []).map((item) => (
                 <div
                   key={item.id}
                   className="p-4 flex flex-wrap items-center justify-between gap-4 hover:bg-slate-50 transition-colors"
@@ -564,7 +726,8 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-slate-400">PIN: {item.currentPin}</span>
+                    
+                    <button type="button" onClick={() => handleEditSchedulePeriod(item)} className="rounded-lg px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">Editar</button>
                     <button
                       type="button"
                       onClick={() => handleDeleteSchedulePeriod(item.id)}
@@ -640,9 +803,8 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                     onChange={(e) => setCsvRawText(e.target.value)}
                     className="w-full p-3 font-mono text-xs border border-slate-300 rounded-xl bg-white"
                   />
-                  {csvSuccessMessage && (
-                    <span className="text-xs text-emerald-600 font-bold block">{csvSuccessMessage}</span>
-                  )}
+                  {csvSuccessMessage && <span role="status" className="text-xs text-emerald-600 font-bold block">{csvSuccessMessage}</span>}
+                  {csvErrorMessage && <span role="alert" className="text-xs text-rose-700 font-semibold block">{csvErrorMessage}</span>}
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
@@ -653,9 +815,10 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs"
+                      disabled={csvImportBusy}
+                      className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs disabled:opacity-50"
                     >
-                      Procesar e Inscribir Alumnos
+                      {csvImportBusy ? 'Importando…' : 'Procesar e Inscribir Alumnos'}
                     </button>
                   </div>
                 </form>
@@ -669,6 +832,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                   Matricular Alumno en {currentGroup?.name}
                 </h4>
                 <form onSubmit={handleCreateStudent} className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {newStudentError && <p role="alert" className="sm:col-span-2 rounded-lg bg-rose-50 p-3 text-rose-700">{newStudentError}</p>}
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">Nombre Completo del Alumno</label>
                     <input
@@ -703,9 +867,10 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs"
+                      disabled={newStudentBusy}
+                      className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs disabled:opacity-50"
                     >
-                      Guardar Alumno
+                      {newStudentBusy ? 'Guardando…' : 'Guardar Alumno'}
                     </button>
                   </div>
                 </form>
@@ -714,7 +879,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
 
             {/* Students List */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {groupStudents.map((st) => (
+              {groupStudents.filter((st) => st.active !== false).map((st) => (
                 <div
                   key={st.id}
                   className="bg-white p-3.5 rounded-xl border border-slate-200 flex items-center gap-3 shadow-2xs"
@@ -728,9 +893,11 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                     <h5 className="text-xs font-bold text-slate-900 truncate">{st.name}</h5>
                     <span className="text-[11px] font-mono text-slate-500 block">{st.matricula}</span>
                     <span className="text-[10px] text-slate-400 block truncate">{st.currentZone}</span>
+                    <div className="mt-2 flex gap-2"><button type="button" onClick={() => handleEditStudent(st)} className="text-[10px] font-semibold text-indigo-700">Editar</button><button type="button" onClick={() => handleToggleStudent(st)} className="text-[10px] font-semibold text-rose-700">Dar de baja</button></div>
                   </div>
                 </div>
               ))}
+              {groupStudents.some((st) => st.active === false) && <div className="sm:col-span-2 lg:col-span-3 border-t pt-3"><p className="mb-2 text-xs font-bold text-slate-500">Alumnos dados de baja (historial conservado)</p>{groupStudents.filter((st) => st.active === false).map((st) => <div key={st.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-2 text-xs"><span>{st.name} · {st.matricula}</span><button type="button" onClick={() => handleToggleStudent(st)} className="font-semibold text-emerald-700">Reactivar</button></div>)}</div>}
             </div>
           </div>
         )}
@@ -804,13 +971,16 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
         {/* TAB 5: MAPA */}
         {activeTab === 'map' && (
           <div className="p-6">
-            <CampusMap
-              students={groupStudents}
-              currentStudentId={groupStudents[0]?.id || ''}
-            />
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
+              <h3 className="font-bold">Mapa georreferenciado pendiente</h3>
+              <p className="mt-2 leading-relaxed">
+                El mapa real requiere conectar la ubicación GPS del plantel y las verificaciones de los dispositivos. AulaControl no mostrará posiciones simuladas ni ubicaciones inventadas.
+              </p>
+            </div>
           </div>
         )}
       </div>
     </div>
+    </>
   );
 };

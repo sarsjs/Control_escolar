@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
+import { provisionSchoolAccount } from './utils/accountProvisioning';
 import {
   UserAccount,
   UserRole,
@@ -11,19 +15,10 @@ import {
   AuditLogEntry,
   AttendanceDispute,
   StudentPresenceStatus,
-  ValidationMethod,
   SchoolInstitution,
+  EtaReport,
 } from './types';
-import {
-  MOCK_USERS,
-  MOCK_ORIENTADORES,
-  MOCK_TEACHERS,
-  INITIAL_GROUPS,
-  INITIAL_STUDENTS,
-  INITIAL_NOTIFICATIONS,
-  INITIAL_SCHOOLS,
-  INSTITUTION_INFO,
-} from './data/mockData';
+/* Real school records are loaded from Firestore; mock fixtures are intentionally not imported. */
 import { Navbar } from './components/Navbar';
 import { LoginView } from './components/LoginView';
 import { StudentAppView } from './components/StudentAppView';
@@ -31,94 +26,70 @@ import { TeacherDashboardView } from './components/TeacherDashboardView';
 import { OrientadorDashboardView } from './components/OrientadorDashboardView';
 import { DirectorDashboardView } from './components/DirectorDashboardView';
 import { SuperAdminDashboardView } from './components/SuperAdminDashboardView';
-import { SimulationControls } from './components/SimulationControls';
 import { EtaPromptModal } from './components/EtaPromptModal';
 import { ClassCheckinModal } from './components/ClassCheckinModal';
 import { DisputeModal } from './components/DisputeModal';
 import { NotificationToast } from './components/NotificationToast';
 import { NotificationDrawer } from './components/NotificationDrawer';
-import { Sparkles, Cloud, CloudCheck } from 'lucide-react';
+import { Cloud, CloudCheck } from 'lucide-react';
 import {
   testFirestoreConnection,
-  seedInitialDataIfEmpty,
   syncStudentToCloud,
-  recordAuditLogToCloud,
+  syncStudentAndGroupToCloud,
+  syncStudentEnrollmentToCloud,
+  syncStudentsAndGroupToCloud,
+  syncAttendanceCorrectionToCloud,
   recordDisputeToCloud,
-  pushNotificationToCloud,
+  resolveDisputeToCloud,
+  createEtaReport,
+  subscribeToEtaReports,
   subscribeToStudents,
+  subscribeToStudentById,
+  subscribeToGroupById,
   syncSchoolToCloud,
   subscribeToSchools,
+  syncGroupToCloud,
+  subscribeToGroups,
+  subscribeToDisputes,
+  subscribeToAuditLogs,
+  subscribeToOrientadores,
+  subscribeToTeachers,
+  syncOrientadorToCloud,
+  syncTeacherToCloud,
 } from './utils/firebaseSync';
-
-const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
-  {
-    id: 'aud-001',
-    attendanceId: 'att-diego-1',
-    studentId: 'stu-diego',
-    studentName: 'Diego Navarro Gil',
-    groupId: 'grp-2b',
-    subjectName: 'Matemáticas II',
-    previousStatus: 'outside_school',
-    newStatus: 'in_class',
-    modifiedBy: 'Prof. Roberto Gómez',
-    modifiedByRole: 'teacher',
-    reason: 'Falla temporal de BLE; validación manual por lista firmada en pizarrón.',
-    timestamp: '06:54 AM',
-  },
-];
-
-const INITIAL_DISPUTES: AttendanceDispute[] = [
-  {
-    id: 'disp-001',
-    attendanceId: 'att-mateo-1',
-    studentId: 'stu-mateo',
-    studentName: 'Mateo Fernández Solís',
-    groupId: 'grp-2b',
-    subjectName: 'Matemáticas II',
-    date: '2026-10-22',
-    studentReason: 'Llegué a tiempo pero mi Bluetooth estuvo desconectado al entrar al aula 102.',
-    status: 'pending',
-  },
-];
 
 export default function App() {
   // Schools State (Multi-tenant SaaS)
-  const [schools, setSchools] = useState<SchoolInstitution[]>(() => {
-    const saved = localStorage.getItem('aulacontrol_schools');
-    return saved ? JSON.parse(saved) : INITIAL_SCHOOLS;
-  });
-  const [currentSchool, setCurrentSchool] = useState<SchoolInstitution>(schools[0] || INITIAL_SCHOOLS[0]);
-  const [usersList, setUsersList] = useState<UserAccount[]>(MOCK_USERS);
+  // School records are loaded from Firestore after authentication; never mix cached demo schools into the real tenant list.
+  const [schools, setSchools] = useState<SchoolInstitution[]>([]);
+  const [currentSchool, setCurrentSchool] = useState<SchoolInstitution | null>(null);
+  const [usersList, setUsersList] = useState<UserAccount[]>([]);
 
-  // Session: defaults to Super Admin (Dueño de la App) so user can immediately manage schools and directors
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    const saved = localStorage.getItem('aulacontrol_user');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.role === 'superadmin' || parsed.id === 'usr-superadmin') {
-          return MOCK_USERS[0]; // sarsjs@gmail.com
-        }
-        return parsed;
-      } catch {
-        return MOCK_USERS[0];
-      }
-    }
-    return MOCK_USERS[0]; // Start directly as Dueño (sarsjs@gmail.com)
-  });
+  // Never grant a role from localStorage alone. A session must start at the login screen.
+  // The cached profile is not an authentication credential and can be edited by the browser user.
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
 
   // Master Academic State with Local Storage persistence
-  const [orientadores, setOrientadores] = useState<Orientador[]>(MOCK_ORIENTADORES);
-  const [teachers, setTeachers] = useState<Teacher[]>(MOCK_TEACHERS);
-  const [groups, setGroups] = useState<SchoolGroup[]>(INITIAL_GROUPS);
-  const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
-  const [disputes, setDisputes] = useState<AttendanceDispute[]>(INITIAL_DISPUTES);
-  const [notifications, setNotifications] = useState<SystemNotification[]>(INITIAL_NOTIFICATIONS);
+  const [orientadores, setOrientadores] = useState<Orientador[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [groups, setGroups] = useState<SchoolGroup[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [disputes, setDisputes] = useState<AttendanceDispute[]>([]);
+  const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+  const [etaReports, setEtaReports] = useState<EtaReport[]>([]);
+  const [staffSubscriptionError, setStaffSubscriptionError] = useState<string>('');
 
-  // Time & Simulation
-  const [simulatedTime, setSimulatedTime] = useState<string>('07:05 AM');
-  const [simulationStep, setSimulationStep] = useState<number>(1);
+  // Use the device's real local time for audit and notification timestamps.
+  const [simulatedTime, setSimulatedTime] = useState<string>(() =>
+    new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+  );
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setSimulatedTime(new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }));
+    }, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   // Modals
   const [etaModalOpen, setEtaModalOpen] = useState<boolean>(false);
@@ -127,6 +98,89 @@ export default function App() {
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState<boolean>(false);
 
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
+
+  // Restore the authenticated Firebase session and verify its school profile on every load.
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        if (active) setCurrentUser(null);
+        return;
+      }
+
+      try {
+        const profileSnapshot = await getDoc(doc(db, 'users', firebaseUser.uid));
+        const profile = profileSnapshot.data();
+        const validRoles: UserRole[] = ['superadmin', 'director', 'orientador', 'teacher', 'student'];
+        if (!profileSnapshot.exists() || typeof profile?.role !== 'string' || !validRoles.includes(profile.role as UserRole)) {
+          await signOut(auth);
+          if (active) setCurrentUser(null);
+          return;
+        }
+
+        const role = profile.role as UserRole;
+        const profileName = typeof profile.name === 'string'
+          ? profile.name
+          : (firebaseUser.displayName || firebaseUser.email || 'Usuario');
+        const profileAvatar = typeof profile.avatar === 'string' ? profile.avatar : '';
+        const schoolId = typeof profile.schoolId === 'string' ? profile.schoolId : undefined;
+        const linkedEntityId = typeof profile.linkedEntityId === 'string' ? profile.linkedEntityId : undefined;
+
+        if (active) {
+          setCurrentUser({
+            id: firebaseUser.uid,
+            username: typeof profile.username === 'string' ? profile.username : (firebaseUser.email || ''),
+            name: profileName,
+            email: firebaseUser.email || '',
+            role,
+            avatar: profileAvatar,
+            title: typeof profile.title === 'string' ? profile.title : role,
+            ...(schoolId ? { schoolId } : {}),
+            ...(linkedEntityId ? { linkedEntityId } : {}),
+          });
+
+          // Hydrate the signed-in staff member's own operational profile from the
+          // authenticated Firestore profile; never fall back to sample staff records.
+          if (role === 'orientador' && linkedEntityId) {
+            setOrientadores((prev) => {
+              const current = {
+                id: linkedEntityId,
+                schoolId,
+                name: profileName,
+                email: firebaseUser.email || '',
+                avatar: profileAvatar,
+                phone: typeof profile.phone === 'string' ? profile.phone : '',
+                cubicle: typeof profile.cubicle === 'string' ? profile.cubicle : '',
+                assignedGroupIds: Array.isArray(profile.assignedGroupIds)
+                  ? profile.assignedGroupIds.filter((id: unknown): id is string => typeof id === 'string')
+                  : [],
+              };
+              return [...prev.filter((item) => item.id !== linkedEntityId), current];
+            });
+          } else if (role === 'teacher' && linkedEntityId) {
+            setTeachers((prev) => {
+              const current = {
+                id: linkedEntityId,
+                name: profileName,
+                email: firebaseUser.email || '',
+                avatar: profileAvatar,
+                specialty: typeof profile.specialty === 'string' ? profile.specialty : '',
+                assignedGroupIds: Array.isArray(profile.assignedGroupIds)
+                  ? profile.assignedGroupIds.filter((id: unknown): id is string => typeof id === 'string')
+                  : [],
+              };
+              return [...prev.filter((item) => item.id !== linkedEntityId), current];
+            });
+          }
+        }
+      } catch (error) {
+        console.error('No se pudo restaurar el perfil escolar:', error);
+        await signOut(auth).catch(() => undefined);
+        if (active) setCurrentUser(null);
+      }
+    });
+    return () => { active = false; unsubscribe(); };
+  }, []);
 
   // Save session state to localStorage
   useEffect(() => {
@@ -141,44 +195,137 @@ export default function App() {
     localStorage.setItem('aulacontrol_schools', JSON.stringify(schools));
   }, [schools]);
 
-  // Firebase Boot & Realtime Sync
+  // Firebase data access starts only after Firebase Authentication confirms a profile.
+  // Never seed demo students into a real school database automatically.
   useEffect(() => {
-    testFirestoreConnection().then((connected) => {
-      setIsCloudConnected(connected);
-      if (connected) {
-        seedInitialDataIfEmpty(INITIAL_STUDENTS, INITIAL_GROUPS);
-      }
-    });
+    if (!currentUser) {
+      setIsCloudConnected(false);
+      return;
+    }
 
-    const unsubscribeStudents = subscribeToStudents((cloudStudents) => {
-      if (cloudStudents && cloudStudents.length > 0) {
-        setStudents((prev) => {
-          const map = new Map(prev.map((s) => [s.id, s]));
-          cloudStudents.forEach((cs) => {
-            map.set(cs.id, { ...map.get(cs.id), ...cs });
-          });
-          return Array.from(map.values());
-        });
-      }
-    });
+    testFirestoreConnection().then(setIsCloudConnected);
 
-    const unsubscribeSchools = subscribeToSchools((cloudSchools) => {
-      if (cloudSchools && cloudSchools.length > 0) {
-        setSchools((prev) => {
-          const map = new Map(prev.map((s) => [s.id, s]));
-          cloudSchools.forEach((cs) => {
-            map.set(cs.id, { ...map.get(cs.id), ...cs });
+    // Attendance records must come from Firestore, never from demo fixtures.
+    const isSuperAdmin = currentUser.role === 'superadmin';
+    let unsubscribeStudents: (() => void) | undefined;
+    let unsubscribeGroups: (() => void) | undefined;
+    let unsubscribeStudentGroup: (() => void) | undefined;
+    let unsubscribeOrientadores: (() => void) | undefined;
+    let unsubscribeTeachers: (() => void) | undefined;
+    let unsubscribeAuditLogs: (() => void) | undefined;
+    const unsubscribeDisputes = subscribeToDisputes(
+      currentUser.schoolId,
+      isSuperAdmin,
+      currentUser.linkedEntityId,
+      currentUser.role === 'student',
+      (cloudDisputes) => setDisputes(cloudDisputes)
+    );
+
+    if (currentUser.role === 'student') {
+      setAuditLogs([]);
+    } else {
+      unsubscribeAuditLogs = subscribeToAuditLogs(
+        currentUser.schoolId,
+        isSuperAdmin,
+        (cloudAuditLogs) => setAuditLogs(cloudAuditLogs)
+      );
+    }
+
+    if (currentUser.role === 'student') {
+      // Students must not query the whole school roster. Read only their own
+      // enrollment, then only the group referenced by that enrollment.
+      setStudents([]);
+      setGroups([]);
+      unsubscribeStudents = subscribeToStudentById(currentUser.linkedEntityId, (student) => {
+        setStudents(student ? [student] : []);
+        if (unsubscribeStudentGroup) {
+          unsubscribeStudentGroup();
+          unsubscribeStudentGroup = undefined;
+        }
+        setGroups([]);
+        if (student?.groupId) {
+          unsubscribeStudentGroup = subscribeToGroupById(student.groupId, (group) => {
+            setGroups(group ? [group] : []);
           });
-          return Array.from(map.values());
-        });
+        }
+      });
+    } else {
+      if (currentUser.role === 'director' || currentUser.role === 'orientador') {
+        setTeachers([]);
+        unsubscribeTeachers = subscribeToTeachers(
+          currentUser.schoolId,
+          (items) => {
+            setTeachers(items);
+            setStaffSubscriptionError((prev) => prev.includes('docentes') ? '' : prev);
+          },
+          (err) => {
+            setStaffSubscriptionError(`Error al sincronizar docentes en tiempo real desde Firestore: ${err.message}`);
+          }
+        );
       }
+      if (currentUser.role === 'director') {
+        setOrientadores([]);
+        unsubscribeOrientadores = subscribeToOrientadores(
+          currentUser.schoolId,
+          (items) => {
+            setOrientadores(items);
+            setStaffSubscriptionError((prev) => prev.includes('orientadores') ? '' : prev);
+          },
+          (err) => {
+            setStaffSubscriptionError(`Error al sincronizar orientadores en tiempo real desde Firestore: ${err.message}. Verifica que las reglas de seguridad estén desplegadas.`);
+          }
+        );
+      }
+      unsubscribeStudents = subscribeToStudents(currentUser.schoolId, isSuperAdmin, (cloudStudents) => {
+        setStudents(cloudStudents);
+      });
+      unsubscribeGroups = subscribeToGroups(currentUser.schoolId, isSuperAdmin, (cloudGroups) => {
+        setGroups(cloudGroups);
+      });
+    }
+
+    // Firestore is the source of truth, including when a school collection is empty.
+    const unsubscribeSchools = subscribeToSchools(currentUser.schoolId, isSuperAdmin, (cloudSchools) => {
+      setSchools(cloudSchools);
     });
 
     return () => {
-      if (typeof unsubscribeStudents === 'function') unsubscribeStudents();
-      if (typeof unsubscribeSchools === 'function') unsubscribeSchools();
+      unsubscribeStudents?.();
+      unsubscribeGroups?.();
+      unsubscribeStudentGroup?.();
+      unsubscribeOrientadores?.();
+      unsubscribeTeachers?.();
+      unsubscribeAuditLogs?.();
+      unsubscribeSchools();
+      unsubscribeDisputes();
     };
-  }, []);
+  }, [currentUser?.id]);
+
+  // ETA listeners are scoped to each responsible group; UI filtering alone is not security.
+  useEffect(() => {
+    if (!currentUser) {
+      setEtaReports([]);
+      return;
+    }
+    const assignedGroupIds = groups.filter((group) => {
+      if (currentUser.role === 'orientador') {
+        return group.orientadorId === currentUser.linkedEntityId
+          || group.temporarySubstituteOrientadorId === currentUser.linkedEntityId;
+      }
+      if (currentUser.role === 'teacher') {
+        return group.schedule.some((slot) => slot.teacherId === currentUser.linkedEntityId);
+      }
+      return false;
+    }).map((group) => group.id);
+    return subscribeToEtaReports(
+      currentUser.schoolId,
+      currentUser.role === 'superadmin',
+      currentUser.linkedEntityId,
+      currentUser.role,
+      assignedGroupIds,
+      setEtaReports
+    );
+  }, [currentUser?.id, currentUser?.role, currentUser?.schoolId, currentUser?.linkedEntityId, groups]);
 
   // Helper for notification broadcast
   const pushNotification = (
@@ -206,212 +353,163 @@ export default function App() {
       ...details,
     };
     setNotifications((prev) => [newNotif, ...prev]);
-    pushNotificationToCloud(newNotif);
   };
+
+  // Show live ETA reports only to staff responsible for the report's group.
+  useEffect(() => {
+    if (!currentUser || currentUser.role === 'student') return;
+    const visibleReports = etaReports.filter((report) => {
+      if (currentUser.role === 'superadmin' || currentUser.role === 'director') return true;
+      const group = groups.find((item) => item.id === report.groupId);
+      if (!group) return false;
+      if (currentUser.role === 'orientador') return group.orientadorId === currentUser.linkedEntityId || group.temporarySubstituteOrientadorId === currentUser.linkedEntityId;
+      if (currentUser.role === 'teacher') return group.schedule.some((slot) => slot.teacherId === currentUser.linkedEntityId);
+      return false;
+    });
+    const reportNotifications: SystemNotification[] = visibleReports.map((report) => ({
+      id: `eta-report-${report.id}`,
+      type: currentUser.role === 'teacher' ? 'teacher_eta_alert' : 'orientador_eta_alert',
+      title: `Aviso ETA: ${report.studentName} · ${report.groupName}`,
+      message: `${report.studentName} estima llegar en ${report.etaMinutes} min. Motivo: ${report.reason}.`,
+      timestamp: report.createdAt ? new Date(report.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : 'Reciente',
+      targetRole: currentUser.role, targetUserId: currentUser.id, groupId: report.groupId, studentId: report.studentId,
+      read: false, actionRequired: true,
+    }));
+    setNotifications((prev) => [...reportNotifications, ...prev.filter((item) => !item.id.startsWith('eta-report-'))]);
+  }, [etaReports, groups, currentUser?.id, currentUser?.role, currentUser?.linkedEntityId]);
 
   // Primary active student (Sofía Morales)
-  const currentStudent = students.find((s) => s.id === 'stu-sofia') || students[0];
-  const studentGroup = groups.find((g) => g.id === currentStudent?.groupId) || groups[0];
-  const studentOrientador = orientadores.find(
-    (o) =>
-      o.id === studentGroup.orientadorId ||
-      o.id === studentGroup.temporarySubstituteOrientadorId
-  );
-  const studentActiveClass = studentGroup.schedule[0];
+  const baseCurrentStudent = currentUser?.role === 'student'
+    ? students.find((s) => s.id === currentUser.linkedEntityId)
+    : undefined;
+  const latestOwnEtaReport = currentUser?.role === 'student'
+    ? etaReports.filter((report) => report.studentId === currentUser.linkedEntityId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+    : undefined;
+  // ETA is a report from the student, not proof of physical arrival or attendance.
+  // Expose its details without changing the authoritative enrollment/presence status.
+  const currentStudent = baseCurrentStudent && latestOwnEtaReport
+    ? {
+        ...baseCurrentStudent,
+        etaMinutes: latestOwnEtaReport.etaMinutes,
+        etaReason: latestOwnEtaReport.reason,
+        etaSentAt: latestOwnEtaReport.createdAt
+          ? new Date(latestOwnEtaReport.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+          : 'Aviso enviado',
+      }
+    : baseCurrentStudent;
+  const studentGroup = currentStudent
+    ? groups.find((g) => g.id === currentStudent.groupId)
+    : undefined;
+  const studentOrientador = studentGroup
+    ? orientadores.find((o) => o.id === studentGroup.orientadorId || o.id === studentGroup.temporarySubstituteOrientadorId)
+    : undefined;
+  const studentActiveClass = studentGroup?.schedule?.[0];
 
   // Primary active teacher
-  const currentTeacherUser = currentUser?.role === 'teacher' ? currentUser : MOCK_USERS[4];
-  const teacherAssignedGroups = groups.filter((g) =>
-    g.schedule.some((s) => s.teacherId === currentTeacherUser.linkedEntityId || s.teacherName.includes('Roberto'))
-  );
-  const [activeTeacherGroup, setActiveTeacherGroup] = useState<SchoolGroup>(
-    teacherAssignedGroups[0] || groups[0]
-  );
+  const currentTeacherUser = currentUser?.role === 'teacher' ? currentUser : undefined;
+  const teacherAssignedGroups = currentTeacherUser
+    ? groups.filter((g) => g.schedule.some((s) => s.teacherId === currentTeacherUser.linkedEntityId))
+    : [];
+  const [activeTeacherGroup, setActiveTeacherGroup] = useState<SchoolGroup | null>(null);
+  useEffect(() => {
+    if (!activeTeacherGroup && teacherAssignedGroups.length > 0) setActiveTeacherGroup(teacherAssignedGroups[0]);
+    else if (activeTeacherGroup && !teacherAssignedGroups.some((g) => g.id === activeTeacherGroup.id)) setActiveTeacherGroup(teacherAssignedGroups[0] || null);
+  }, [teacherAssignedGroups, activeTeacherGroup]);
 
   // Primary active orientador (Strict isolation per user)
-  const currentOrientadorEntity =
-    orientadores.find((o) => o.id === currentUser?.linkedEntityId) || orientadores[0];
+  const currentOrientadorEntity = orientadores.find((o) => o.id === currentUser?.linkedEntityId);
 
   // 1. Student ETA submission (routes to Orientador + Teacher)
-  const handleStudentSubmitEta = (minutes: number, reason: string) => {
-    const updatedStudent: Student = {
-      ...currentStudent,
-      currentStatus: 'en_route_delayed',
-      currentZone: 'En camino hacia el plantel',
+  const handleStudentSubmitEta = async (minutes: number, reason: string) => {
+    if (!currentStudent || !studentGroup) {
+      throw new Error('No se encontró una inscripción escolar activa para enviar el aviso.');
+    }
+    // Persist a separate ETA report; enrollment and attendance remain staff-controlled.
+    await createEtaReport({
+      schoolId: currentStudent.schoolId || currentUser?.schoolId || '',
+      studentId: currentStudent.id,
+      studentName: currentStudent.name,
+      groupId: studentGroup.id,
+      groupName: studentGroup.name,
       etaMinutes: minutes,
-      etaReason: reason,
-      etaSentAt: simulatedTime,
-      lastUpdated: simulatedTime,
-    };
+      reason,
+    });
 
-    setStudents((prev) =>
-      prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
-    );
-    syncStudentToCloud(updatedStudent);
-
-    if (studentOrientador) {
-      pushNotification(
-        'orientador_eta_alert',
-        `Aviso ETA de ${studentGroup.name}: ${currentStudent.name}`,
-        `${currentStudent.name} notificó a Orientación llegada estimada en ~${minutes} min. Motivo: ${reason}. El grupo sabe que no faltará.`,
-        'orientador',
-        {
-          orientadorId: studentOrientador.id,
-          groupId: studentGroup.id,
-          studentId: currentStudent.id,
-        }
-      );
-    }
-
-    if (studentActiveClass) {
-      pushNotification(
-        'teacher_eta_alert',
-        `Reporte de Demora en tu clase: ${currentStudent.name}`,
-        `${currentStudent.name} notificó a ${studentActiveClass.teacherName} llegada estimada en ~${minutes} min (${reason}) para la materia de ${studentActiveClass.subjectName}.`,
-        'teacher',
-        {
-          teacherId: studentActiveClass.teacherId,
-          groupId: studentGroup.id,
-          studentId: currentStudent.id,
-        }
-      );
-    }
-
-    setSimulationStep(2);
   };
 
-  // 2. Student crosses school gate (GPS triggers presence in campus)
-  const handleCrossGate = () => {
-    const updatedStudent: Student = {
-      ...currentStudent,
-      currentStatus: 'on_campus_not_in_class',
-      currentZone: 'Plaza Cívica / Patios Centrales',
-      distanceToCampusMeters: 0,
-      lastUpdated: simulatedTime,
-    };
-
-    setStudents((prev) =>
-      prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
-    );
-    syncStudentToCloud(updatedStudent);
-
-    pushNotification(
-      'campus_arrival',
-      'Llegada al Plantel Detectada (GPS)',
-      `Has llegado al plantel. Recuerda que todavía necesitas confirmar tu presencia en tu salón de clase (${studentActiveClass?.classroom}).`,
-      'student',
-      {
-        studentId: currentStudent.id,
-        actionRequired: true,
-      }
-    );
-
-    if (studentOrientador) {
-      pushNotification(
-        'class_unattended',
-        `Alumno en Campus sin ingresar a aula (${studentGroup.name})`,
-        `${currentStudent.name} ingresó a las instalaciones pero aún no se registra en su aula de ${studentActiveClass?.subjectName} (${studentActiveClass?.classroom}).`,
-        'orientador',
-        {
-          orientadorId: studentOrientador.id,
-          groupId: studentGroup.id,
-          studentId: currentStudent.id,
-        }
-      );
-    }
-
-    setSimulationStep(3);
-  };
-
-  // 3. Student leaves campus
-  const handleLeaveCampus = () => {
-    const updatedStudent: Student = {
-      ...currentStudent,
-      currentStatus: 'outside_school',
-      currentZone: 'Fuera del Plantel (A 1.8 km)',
-      distanceToCampusMeters: 1800,
-      validatedVia: null,
-      validatedAt: undefined,
-      lastUpdated: simulatedTime,
-    };
-
-    setStudents((prev) =>
-      prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
-    );
-    syncStudentToCloud(updatedStudent);
-  };
-
-  // 4. Confirm classroom attendance via BLE, PIN, or QR
-  const handleConfirmAttendance = (method: ValidationMethod, validatedCode?: string) => {
-    const updatedStudent: Student = {
-      ...currentStudent,
-      currentStatus: 'in_class',
-      currentZone: `${studentActiveClass?.classroom} (${studentActiveClass?.subjectName.split(' ')[0]})`,
-      validatedVia: method,
-      validatedAt: simulatedTime,
-      lastUpdated: simulatedTime,
-    };
-
-    setStudents((prev) =>
-      prev.map((s) => (s.id === currentStudent.id ? updatedStudent : s))
-    );
-    syncStudentToCloud(updatedStudent);
-
-    pushNotification(
-      'class_validated',
-      'Asistencia Oficial en Aula Acreditada',
-      `${currentStudent.name} confirmó presencia en ${studentActiveClass?.classroom} mediante ${method.toUpperCase()} a las ${simulatedTime}.`,
-      'all'
-    );
-
-    setSimulationStep(4);
-  };
+  // GPS arrival and classroom check-in handlers were removed: these events require real verification.
 
   // 5. Director corrects attendance with immutable audit logging
-  const handleDirectorCorrectAttendance = (
+  const handleDirectorCorrectAttendance = async (
     studentId: string,
     newStatus: StudentPresenceStatus,
     reason: string
   ) => {
-    const targetStudent = students.find((s) => s.id === studentId);
-    if (!targetStudent) return;
+    if (!currentUser?.id || !currentUser.schoolId) {
+      throw new Error('No se puede validar asistencia sin una sesión escolar válida.');
+    }
+    if (!['superadmin', 'director', 'orientador', 'teacher'].includes(currentUser.role)) {
+      throw new Error('Tu perfil no tiene permiso para validar asistencia.');
+    }
+
+    const targetStudent = students.find((student) =>
+      student.id === studentId && student.schoolId === currentUser.schoolId
+    );
+    if (!targetStudent) throw new Error('No se encontró al alumno en este plantel.');
+
+    const targetGroup = groups.find((group) =>
+      group.id === targetStudent.groupId && group.schoolId === currentUser.schoolId
+    );
+    if (!targetGroup) throw new Error('No se encontró el grupo del alumno en este plantel.');
+
+    const isTeacherManual = currentUser.role === 'teacher';
+    if (isTeacherManual) {
+      const teacherIsAssigned = targetGroup.schedule.some((period) =>
+        period.teacherId === currentUser.linkedEntityId || period.teacherId === currentUser.id
+      );
+      if (!teacherIsAssigned) throw new Error('Solo puedes pasar lista en grupos donde tienes una clase asignada.');
+      if (newStatus !== 'in_class') throw new Error('El docente solo puede confirmar presencia en clase; las demás correcciones corresponden a Dirección u Orientación.');
+    }
 
     const previousStatus = targetStudent.currentStatus;
+    const now = new Date();
+    const localDate = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+    const localValidatedAt = `${localDate}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     const updatedStudent: Student = {
       ...targetStudent,
       currentStatus: newStatus,
-      validatedVia: 'director_correction',
-      validatedAt: simulatedTime,
-      lastUpdated: simulatedTime,
+      validatedVia: isTeacherManual ? 'teacher_manual' : 'director_correction',
+      validatedAt: localValidatedAt,
+      lastUpdated: now.toISOString(),
     };
 
-    setStudents((prev) =>
-      prev.map((s) => (s.id === studentId ? updatedStudent : s))
-    );
-    syncStudentToCloud(updatedStudent);
-
-    // Create immutable audit log entry
     const newAuditLog: AuditLogEntry = {
       id: `aud-${Date.now()}`,
+      schoolId: currentUser.schoolId,
+      modifiedById: currentUser.id,
       attendanceId: `att-${studentId}-${Date.now()}`,
       studentId: targetStudent.id,
       studentName: targetStudent.name,
       groupId: targetStudent.groupId,
-      subjectName: studentActiveClass?.subjectName || 'Matemáticas II',
+      subjectName: isTeacherManual
+        ? (targetGroup.schedule.find((period) => period.teacherId === currentUser.linkedEntityId || period.teacherId === currentUser.id)?.subjectName || 'Clase asignada')
+        : (studentActiveClass?.subjectName || 'Sin materia asignada'),
       previousStatus,
       newStatus,
-      modifiedBy: currentUser?.name || 'Dirección General',
-      modifiedByRole: currentUser?.role || 'director',
+      modifiedBy: currentUser.name,
+      modifiedByRole: currentUser.role,
       reason,
-      timestamp: simulatedTime,
+      timestamp: localValidatedAt,
     };
+    await syncAttendanceCorrectionToCloud(updatedStudent, newAuditLog);
 
+    setStudents((prev) => prev.map((student) => student.id === studentId ? updatedStudent : student));
     setAuditLogs((prev) => [newAuditLog, ...prev]);
-    recordAuditLogToCloud(newAuditLog);
 
     pushNotification(
       'attendance_corrected',
-      'Asistencia Corregida por Dirección',
+      isTeacherManual ? 'Asistencia confirmada por docente' : 'Asistencia corregida por personal escolar',
       `La asistencia de ${targetStudent.name} fue modificada de ${previousStatus} a ${newStatus}. Motivo: ${reason}`,
       'orientador',
       { groupId: targetStudent.groupId }
@@ -419,100 +517,310 @@ export default function App() {
   };
 
   // 6. Student submits dispute / review request
-  const handleStudentSubmitDispute = (reason: string) => {
+  const handleStudentSubmitDispute = async (reason: string) => {
+    if (!currentStudent || !studentGroup || !currentUser) {
+      throw new Error('No se encontró una inscripción escolar activa para enviar la solicitud.');
+    }
+    if (!currentStudent.schoolId) {
+      throw new Error('La inscripción del alumno no tiene una escuela asignada. Contacta a orientación.');
+    }
     const newDispute: AttendanceDispute = {
       id: `disp-${Date.now()}`,
+      schoolId: currentStudent.schoolId,
       attendanceId: `att-${currentStudent.id}-${Date.now()}`,
       studentId: currentStudent.id,
       studentName: currentStudent.name,
       groupId: currentStudent.groupId,
-      subjectName: studentActiveClass?.subjectName || 'Matemáticas II',
-      date: '2026-10-22',
+      subjectName: studentActiveClass?.subjectName || 'Sin materia asignada',
+      date: new Date().toISOString().slice(0, 10),
       studentReason: reason,
       status: 'pending',
     };
 
-    setDisputes((prev) => [newDispute, ...prev]);
-    recordDisputeToCloud(newDispute);
-
-    pushNotification(
-      'dispute_requested',
-      `Solicitud de Revisión: ${currentStudent.name}`,
-      `El alumno ${currentStudent.name} (${studentGroup.name}) solicitó revisión de su asistencia en ${studentActiveClass?.subjectName}. Motivo: "${reason}".`,
-      'orientador',
-      {
-        orientadorId: studentOrientador?.id,
-        groupId: studentGroup.id,
-      }
-    );
+    // Only reflect success after Firestore confirms the write.
+    await recordDisputeToCloud(newDispute);
+    // Authorized staff receive the saved dispute through the school-scoped realtime subscription.
+    // Notification writes remain disabled until recipient-scoped notification rules are implemented.
   };
 
   // 7. Resolve dispute by Orientador or Director
-  const handleResolveDispute = (disputeId: string, approved: boolean, notes: string) => {
-    const dispute = disputes.find((d) => d.id === disputeId);
-    if (!dispute) return;
+  const handleResolveDispute = async (disputeId: string, approved: boolean, notes: string) => {
+    const dispute = disputes.find((item) => item.id === disputeId);
+    if (!dispute || !currentUser) throw new Error('Solicitud o sesión no disponible.');
+    if (!['director', 'orientador', 'superadmin'].includes(currentUser.role)) {
+      throw new Error('No tienes permiso para resolver esta solicitud.');
+    }
+    if (!dispute.schoolId) throw new Error('La solicitud no tiene escuela asignada.');
+    const isSuperAdmin = currentUser.role === 'superadmin';
+    if (!isSuperAdmin && currentUser.schoolId !== dispute.schoolId) {
+      throw new Error('La solicitud no pertenece a tu escuela.');
+    }
 
+    const now = new Date().toISOString();
     const updatedDispute: AttendanceDispute = {
       ...dispute,
       status: approved ? 'approved' : 'rejected',
-      resolvedBy: currentUser?.name,
-      resolvedAt: simulatedTime,
+      resolvedBy: currentUser.name,
+      resolvedAt: now,
       resolutionNotes: notes,
     };
-
-    setDisputes((prev) =>
-      prev.map((d) => (d.id === disputeId ? updatedDispute : d))
-    );
-    recordDisputeToCloud(updatedDispute);
-
     if (approved) {
-      handleDirectorCorrectAttendance(
-        dispute.studentId,
-        'in_class',
-        `Revisión aprobada por ${currentUser?.name}: ${notes}`
-      );
+      const student = students.find((item) => item.id === dispute.studentId);
+      if (!student) throw new Error('No se encontró la inscripción del alumno.');
+      if (student.schoolId !== dispute.schoolId) {
+        throw new Error('La inscripción del alumno no corresponde a la escuela de la solicitud.');
+      }
+      const correctedStudent: Student = {
+        ...student,
+        currentStatus: 'in_class',
+        validatedVia: 'director_correction',
+        validatedAt: now,
+        lastUpdated: now,
+      };
+      const auditEntry: AuditLogEntry = {
+        id: 'aud-' + Date.now(),
+        schoolId: dispute.schoolId,
+        modifiedById: currentUser.id,
+        attendanceId: dispute.attendanceId,
+        studentId: student.id,
+        studentName: student.name,
+        groupId: student.groupId,
+        subjectName: dispute.subjectName,
+        previousStatus: student.currentStatus,
+        newStatus: 'in_class',
+        modifiedBy: currentUser.name,
+        modifiedByRole: currentUser.role,
+        reason: 'Revisión aprobada por ' + currentUser.name + ': ' + notes,
+        timestamp: now,
+      };
+      await resolveDisputeToCloud(updatedDispute, correctedStudent, auditEntry);
+      setStudents((prev) => prev.map((item) => item.id === student.id ? correctedStudent : item));
+      setAuditLogs((prev) => [auditEntry, ...prev]);
+    } else {
+      await resolveDisputeToCloud(updatedDispute);
     }
+    setDisputes((prev) => prev.map((item) => item.id === disputeId ? updatedDispute : item));
+  };
 
-    pushNotification(
-      'dispute_resolved',
-      `Resolución de Revisión de Asistencia`,
-      `Tu solicitud para ${dispute.subjectName} fue ${approved ? 'APROBADA' : 'RECHAZADA'} por ${currentUser?.name}. Notas: ${notes}`,
-      'student',
-      { studentId: dispute.studentId }
+
+  // Director roster management: persist first, then reflect the confirmed change locally.
+  const handleProvisionAccount = async (kind: 'orientador' | 'teacher' | 'student', id: string) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) {
+      throw new Error('Solo dirección con plantel asignado puede crear accesos.');
+    }
+    if (kind === 'student') {
+      const student = students.find((item) => item.id === id && item.schoolId === currentUser.schoolId);
+      const email = student?.email?.trim() || '';
+      if (!student || student.active === false) throw new Error('El alumno debe estar activo para crear o reenviar su acceso.');
+      if (!email) throw new Error('Este alumno no tiene correo registrado. Primero captura su correo en la ficha escolar.');
+      await provisionSchoolAccount({ role: 'student', schoolId: currentUser.schoolId, linkedEntityId: student.id, email, name: student.name });
+      return;
+    }
+    const entity = kind === 'orientador'
+      ? orientadores.find((item) => item.id === id && item.schoolId === currentUser.schoolId)
+      : teachers.find((item) => item.id === id && item.schoolId === currentUser.schoolId);
+    if (!entity || entity.active === false || !entity.email?.trim()) {
+      throw new Error('La ficha debe estar activa y tener un correo válido.');
+    }
+    await provisionSchoolAccount({
+      role: kind,
+      schoolId: currentUser.schoolId,
+      linkedEntityId: entity.id,
+      email: entity.email.trim(),
+      name: entity.name.trim(),
+    });
+  };
+
+  const handleSaveOrientador = async (input: { id?: string; name: string; email: string; phone: string; cubicle: string }) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
+    const id = input.id || `ori-${Date.now()}`;
+    const name = input.name.trim();
+    const email = input.email.trim().toLowerCase();
+    if (!name) throw new Error('El nombre del orientador es obligatorio.');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('El correo electrónico del orientador no es válido.');
+    const duplicateEmail = email && [...orientadores, ...teachers].some((item) =>
+      item.id !== id && item.schoolId === currentUser.schoolId && item.email?.trim().toLowerCase() === email
     );
+    if (duplicateEmail) throw new Error('Ese correo ya está registrado para otro orientador o docente de este plantel.');
+    const existing = orientadores.find((item) => item.id === id);
+    const record = { id, name, email, phone: input.phone.trim(), cubicle: input.cubicle.trim(), avatar: existing?.avatar || '', assignedGroupIds: existing?.assignedGroupIds || [], active: existing?.active !== false, schoolId: currentUser.schoolId };
+    await syncOrientadorToCloud(record);
+    setOrientadores((prev) => [...prev.filter((item) => item.id !== id), record]);
+  };
+
+  const handleSaveTeacher = async (input: { id?: string; name: string; email: string; specialty: string }) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
+    const id = input.id || `doc-${Date.now()}`;
+    const name = input.name.trim();
+    const email = input.email.trim().toLowerCase();
+    if (!name) throw new Error('El nombre del docente es obligatorio.');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('El correo electrónico del docente no es válido.');
+    const duplicateEmail = email && [...orientadores, ...teachers].some((item) =>
+      item.id !== id && item.schoolId === currentUser.schoolId && item.email?.trim().toLowerCase() === email
+    );
+    if (duplicateEmail) throw new Error('Ese correo ya está registrado para otro orientador o docente de este plantel.');
+    const existing = teachers.find((item) => item.id === id);
+    const record = { id, name, email, specialty: input.specialty.trim(), avatar: existing?.avatar || '', assignedGroupIds: existing?.assignedGroupIds || [], active: existing?.active !== false, schoolId: currentUser.schoolId };
+    await syncTeacherToCloud(record);
+    setTeachers((prev) => [...prev.filter((item) => item.id !== id), record]);
+  };
+
+  const handleSaveStudent = async (input: { id?: string; name: string; matricula: string; email: string; groupId: string }) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
+    const group = groups.find((item) => item.id === input.groupId && item.schoolId === currentUser.schoolId && item.active !== false);
+    if (!group) throw new Error('Selecciona un grupo activo de este plantel.');
+    const name = input.name.trim();
+    const matricula = input.matricula.trim();
+    const email = input.email.trim().toLowerCase();
+    if (!name || !matricula) throw new Error('El nombre y la matrícula son obligatorios.');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('El correo electrónico no tiene un formato válido.');
+    const id = input.id || `stu-${Date.now()}`;
+    const duplicateMatricula = students.find((item) =>
+      item.schoolId === currentUser.schoolId
+      && item.id !== id
+      && item.matricula.trim().toLocaleLowerCase('es-MX') === matricula.toLocaleLowerCase('es-MX')
+    );
+    if (duplicateMatricula) throw new Error('La matrícula ya está registrada en este plantel.');
+    const existing = students.find((item) => item.id === id);
+    const record: Student = { id, schoolId: currentUser.schoolId, name, matricula, ...(email ? { email } : {}), groupId: input.groupId, avatar: existing?.avatar || '', currentStatus: existing?.currentStatus || 'outside_school', currentZone: existing?.currentZone || 'unknown', distanceToCampusMeters: existing?.distanceToCampusMeters || 0, lastUpdated: new Date().toISOString(), active: existing?.active !== false };
+    const oldGroup = groups.find((item) => item.id === existing?.groupId && item.schoolId === currentUser.schoolId);
+    const updatedOldGroup = oldGroup && oldGroup.id !== group.id
+      ? { ...oldGroup, studentIds: oldGroup.studentIds.filter((studentId) => studentId !== id) }
+      : undefined;
+    const updatedGroup = {
+      ...group,
+      studentIds: [...new Set([
+        ...group.studentIds.filter((studentId) => studentId !== id),
+        id,
+      ])],
+    };
+    await syncStudentEnrollmentToCloud(record, updatedGroup, updatedOldGroup);
+    setGroups((prev) => prev.map((item) => {
+      if (updatedOldGroup && item.id === updatedOldGroup.id) return updatedOldGroup;
+      if (item.id === updatedGroup.id) return updatedGroup;
+      return item;
+    }));
+    setStudents((prev) => [...prev.filter((item) => item.id !== id), record]);
+  };
+
+  const handleSetRosterActive = async (kind: 'orientador' | 'teacher' | 'student', id: string, active: boolean) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
+    if (kind === 'orientador') {
+      const item = orientadores.find((entry) => entry.id === id); if (!item) return;
+      if (!active) {
+        const assignedGroups = groups.filter((group) =>
+          group.schoolId === currentUser.schoolId
+          && group.active !== false
+          && (group.orientadorId === id || group.temporarySubstituteOrientadorId === id)
+        );
+        if (assignedGroups.length > 0) {
+          const groupNames = assignedGroups.map((group) => group.name).join(', ');
+          throw new Error(`No se puede desactivar al orientador porque tiene grupos activos asignados: ${groupNames}. Reasigna primero esos grupos.`);
+        }
+      }
+      const record = { ...item, active, schoolId: currentUser.schoolId }; await syncOrientadorToCloud(record);
+      setOrientadores((prev) => prev.map((entry) => entry.id === id ? record : entry));
+    } else if (kind === 'teacher') {
+      const item = teachers.find((entry) => entry.id === id); if (!item) return;
+      if (!active) {
+        const assignedGroups = groups.filter((group) =>
+          group.schoolId === currentUser.schoolId
+          && group.active !== false
+          && group.schedule.some((slot) => slot.teacherId === id)
+        );
+        if (assignedGroups.length > 0) {
+          const groupNames = assignedGroups.map((group) => group.name).join(', ');
+          throw new Error(`No se puede desactivar al docente porque tiene horarios activos asignados: ${groupNames}. Reasigna primero sus clases.`);
+        }
+      }
+      const record = { ...item, active, schoolId: currentUser.schoolId }; await syncTeacherToCloud(record);
+      setTeachers((prev) => prev.map((entry) => entry.id === id ? record : entry));
+    } else {
+      const item = students.find((entry) => entry.id === id); if (!item) return;
+      const record = { ...item, active, schoolId: currentUser.schoolId, lastUpdated: new Date().toISOString() }; await syncStudentToCloud(record);
+      setStudents((prev) => prev.map((entry) => entry.id === id ? record : entry));
+    }
   };
 
   // 8. Director reassigns group
-  const handleReassignGroupToOrientador = (groupId: string, newOrientadorId: string) => {
-    setGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, orientadorId: newOrientadorId } : g))
-    );
-
-    setOrientadores((prev) =>
-      prev.map((ori) => {
-        if (ori.id === newOrientadorId) {
-          return {
-            ...ori,
-            assignedGroupIds: Array.from(new Set([...ori.assignedGroupIds, groupId])),
-          };
-        }
-        return {
-          ...ori,
-          assignedGroupIds: ori.assignedGroupIds.filter((id) => id !== groupId),
-        };
-      })
-    );
+  const handleReassignGroupToOrientador = async (groupId: string, newOrientadorId: string) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) {
+      throw new Error('Solo Dirección puede reasignar grupos.');
+    }
+    const schoolId: string = currentUser.schoolId;
+    const group = groups.find((item) => item.id === groupId && item.schoolId === schoolId);
+    if (!group) throw new Error('No se encontró el grupo de este plantel.');
+    const target = orientadores.find((item) => item.id === newOrientadorId && item.schoolId === schoolId && item.active !== false);
+    if (!target) throw new Error('Selecciona un orientador activo de este plantel.');
+    const updatedGroup = { ...group, orientadorId: newOrientadorId };
+    const updatedOrientadores = orientadores.map((item) => {
+      const ids = new Set(item.assignedGroupIds || []);
+      ids.delete(groupId);
+      if (item.id === newOrientadorId) ids.add(groupId);
+      return { ...item, assignedGroupIds: [...ids], schoolId: schoolId };
+    });
+    // Persist the authoritative group assignment before updating the visible state.
+    await syncGroupToCloud(updatedGroup);
+    for (const item of updatedOrientadores) {
+      if (item.id === target.id || item.assignedGroupIds.length !== (orientadores.find((oldItem) => oldItem.id === item.id)?.assignedGroupIds || []).length) {
+        await syncOrientadorToCloud(item);
+      }
+    }
+    setGroups((prev) => prev.map((item) => item.id === groupId ? updatedGroup : item));
+    setOrientadores(updatedOrientadores);
   };
 
   // 9. Director assigns temporary substitute orientador
-  const handleAssignTemporarySubstitute = (groupId: string, substituteOrientadorId?: string) => {
-    setGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, temporarySubstituteOrientadorId: substituteOrientadorId } : g))
-    );
+  const handleAssignTemporarySubstitute = async (groupId: string, substituteOrientadorId?: string) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) {
+      throw new Error('Solo Dirección puede asignar un orientador sustituto.');
+    }
+    const group = groups.find((item) => item.id === groupId && item.schoolId === currentUser.schoolId);
+    if (!group) throw new Error('No se encontró el grupo de este plantel.');
+    if (substituteOrientadorId) {
+      const substitute = orientadores.find((item) =>
+        item.id === substituteOrientadorId
+        && item.schoolId === currentUser.schoolId
+        && item.active !== false
+      );
+      if (!substitute) throw new Error('Selecciona un orientador sustituto activo de este plantel.');
+      if (substitute.id === group.orientadorId) {
+        throw new Error('El sustituto debe ser distinto del orientador titular.');
+      }
+    }
+    const updatedGroup: SchoolGroup = {
+      ...group,
+      ...(substituteOrientadorId
+        ? { temporarySubstituteOrientadorId: substituteOrientadorId }
+        : { temporarySubstituteOrientadorId: undefined }),
+    };
+    await syncGroupToCloud(updatedGroup);
+    setGroups((prev) => prev.map((item) => item.id === groupId ? updatedGroup : item));
+  };
+
+
+  const handleUpdateDirectorGroup = async (input: { id: string; name: string; semester: number; turn: 'Matutino' | 'Vespertino'; orientadorId: string; active: boolean }) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Solo dirección con plantel asignado puede modificar grupos.');
+    const existing = groups.find((group) => group.id === input.id && group.schoolId === currentUser.schoolId);
+    if (!existing) throw new Error('No se encontró el grupo de este plantel.');
+    if (!input.name.trim()) throw new Error('El nombre del grupo es obligatorio.');
+    if (input.orientadorId && !orientadores.some((item) => item.id === input.orientadorId && item.active !== false)) throw new Error('Selecciona un orientador activo de este plantel.');
+    const updated: SchoolGroup = { ...existing, name: input.name.trim(), semester: input.semester, turn: input.turn, orientadorId: input.orientadorId, active: input.active };
+    await syncGroupToCloud(updated);
+    setGroups((prev) => prev.map((group) => group.id === updated.id ? updated : group));
+    setOrientadores((prev) => prev.map((item) => {
+      const ids = new Set(item.assignedGroupIds || []);
+      if (item.id === existing.orientadorId) ids.delete(existing.id);
+      if (item.id === updated.orientadorId) ids.add(updated.id);
+      return { ...item, assignedGroupIds: [...ids] };
+    }));
   };
 
   // 10. Director creates new group
-  const handleCreateNewGroup = (name: string, semester: number, orientadorId: string) => {
+  const handleCreateNewGroup = async (name: string, semester: number, orientadorId: string) => {
+    if (!currentUser || !['director', 'superadmin'].includes(currentUser.role) || !currentUser.schoolId) {
+      throw new Error('No hay una sesión autorizada con escuela asignada para crear el grupo.');
+    }
     const newId = `grp-${Date.now()}`;
     const newGroup: SchoolGroup = {
       id: newId,
@@ -520,253 +828,280 @@ export default function App() {
       semester,
       turn: 'Matutino',
       orientadorId,
+      schoolId: currentUser.schoolId,
       studentIds: [],
-      schedule: [
-        {
-          id: `sch-${Date.now()}-1`,
-          dayOfWeek: 'Lunes a Viernes',
-          startTime: '07:00',
-          endTime: '08:30',
-          toleranceMinutes: 10,
-          subjectName: 'Matemáticas Generales',
-          subjectCode: 'MAT-100',
-          teacherId: teachers[0].id,
-          teacherName: teachers[0].name,
-          teacherAvatar: teachers[0].avatar,
-          classroom: 'Aula 104',
-          building: 'Edificio A',
-          currentPin: '5812',
-          beaconUuid: 'e2c56db5-dffb-48d2-b060-d0f5a71096a9',
-          color: '#2563eb',
-        },
-      ],
+      schedule: [],
     };
 
+    // Persist first; do not show a group as created if Firestore rejects the write.
+    await syncGroupToCloud(newGroup);
     setGroups((prev) => [...prev, newGroup]);
     setOrientadores((prev) =>
       prev.map((o) =>
-        o.id === orientadorId ? { ...o, assignedGroupIds: [...o.assignedGroupIds, newId] } : o
+        o.id === orientadorId ? { ...o, assignedGroupIds: [...new Set([...o.assignedGroupIds, newId])] } : o
       )
     );
   };
 
   // 11. Orientador updates schedule
-  const handleUpdateGroupSchedule = (groupId: string, newSchedule: GroupScheduleItem[]) => {
-    setGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, schedule: newSchedule } : g))
+  const handleCreateGroupForOrientador = async (name: string, semester: number, turn: 'Matutino' | 'Vespertino') => {
+    if (!currentOrientadorEntity || !currentUser?.schoolId) {
+      throw new Error('No se puede crear el grupo: falta vincular al orientador con un plantel real.');
+    }
+    const normalizedName = name.trim().toLocaleLowerCase('es-MX');
+    const duplicate = groups.find((group) =>
+      group.schoolId === currentUser.schoolId
+      && group.active !== false
+      && group.semester === semester
+      && group.turn === turn
+      && group.name.trim().toLocaleLowerCase('es-MX') === normalizedName
     );
+    if (duplicate) throw new Error('Ya existe un grupo con ese semestre, nombre y turno.');
+    if (!name.trim()) throw new Error('El nombre del grupo es obligatorio.');
+    const newGroup: SchoolGroup = {
+      id: `grp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: name.trim(),
+      semester,
+      turn,
+      orientadorId: currentOrientadorEntity.id,
+      schoolId: currentUser.schoolId,
+      studentIds: [],
+      schedule: [],
+      active: true,
+    };
+    try {
+      await syncGroupToCloud(newGroup);
+      setGroups((prev) => [...prev, newGroup]);
+      setOrientadores((prev) => prev.map((orientador) => orientador.id === currentOrientadorEntity.id
+        ? { ...orientador, assignedGroupIds: [...orientador.assignedGroupIds, newGroup.id] }
+        : orientador));
+    } catch (error) {
+      console.error('No se pudo guardar el grupo en Firestore:', error);
+      throw new Error('No se pudo guardar el grupo en Firestore. Verifica tus permisos y vuelve a intentarlo.');
+    }
+  };
 
-    pushNotification(
-      'schedule_updated',
-      'Horario Escolar Actualizado',
-      `Tu Orientador ha actualizado el horario oficial de tu grupo.`,
-      'student',
-      { groupId }
+  const handleUpdateGroupSchedule = async (groupId: string, newSchedule: GroupScheduleItem[]) => {
+    if (!currentUser || !['director', 'orientador'].includes(currentUser.role) || !currentUser.schoolId) {
+      throw new Error('No tienes permisos para modificar horarios.');
+    }
+    const group = groups.find((item) =>
+      item.id === groupId
+      && item.schoolId === currentUser.schoolId
+      && item.active !== false
     );
+    if (!group) throw new Error('El grupo no existe, está inactivo o no pertenece a tu plantel.');
+    if (currentUser.role === 'orientador'
+      && group.orientadorId !== currentUser.linkedEntityId
+      && group.temporarySubstituteOrientadorId !== currentUser.linkedEntityId) {
+      throw new Error('Solo puedes modificar horarios de grupos que tienes asignados.');
+    }
+    const normalizedSchedule = newSchedule.map((period) => {
+      const teacher = teachers.find((item) =>
+        item.id === period.teacherId
+        && item.schoolId === currentUser.schoolId
+        && item.active !== false
+      );
+      if (!teacher) throw new Error('Cada materia debe tener un docente activo de este plantel.');
+      if (!period.subjectName.trim() || !period.startTime || !period.endTime || period.endTime <= period.startTime) {
+        throw new Error('Revisa la materia y el horario: la hora final debe ser posterior a la inicial.');
+      }
+      return { ...period, teacherName: teacher.name, teacherAvatar: teacher.avatar };
+    });
+    const updatedGroup = { ...group, schedule: normalizedSchedule };
+    await syncGroupToCloud(updatedGroup);
+    setGroups((prev) => prev.map((item) => item.id === groupId ? updatedGroup : item));
+
   };
 
   // 12. Orientador enrolls individual student
-  const handleAddStudentToGroup = (groupId: string, name: string, matricula: string) => {
-    const newStudentId = `stu-${Date.now()}`;
+  const handleAddStudentToGroup = async (groupId: string, name: string, matricula: string) => {
+    const targetGroup = groups.find((group) => group.id === groupId && group.active !== false);
+    if (!targetGroup?.schoolId || targetGroup.schoolId !== currentUser?.schoolId) {
+      throw new Error('No se puede inscribir: el grupo no está activo o no pertenece al plantel.');
+    }
+    if (currentUser?.role === 'orientador'
+      && targetGroup.orientadorId !== currentOrientadorEntity?.id
+      && targetGroup.temporarySubstituteOrientadorId !== currentOrientadorEntity?.id) {
+      throw new Error('Solo puedes inscribir alumnos en grupos que tienes asignados.');
+    }
+    if (!['director', 'orientador', 'superadmin'].includes(currentUser?.role || '')) {
+      throw new Error('Tu perfil no tiene permiso para inscribir alumnos.');
+    }
+    const cleanName = name.trim();
+    const cleanMatricula = matricula.trim();
+    if (!cleanName || !cleanMatricula) {
+      throw new Error('El nombre y la matrícula son obligatorios.');
+    }
+    const duplicateMatricula = students.some((student) =>
+      student.schoolId === targetGroup.schoolId
+      && student.matricula.trim().toLocaleLowerCase('es-MX') === cleanMatricula.toLocaleLowerCase('es-MX')
+    );
+    if (duplicateMatricula) {
+      throw new Error('La matrícula ya está registrada en este plantel.');
+    }
+    const newStudentId = `stu-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const newStudent: Student = {
       id: newStudentId,
-      name,
-      matricula,
+      name: cleanName,
+      matricula: cleanMatricula,
       groupId,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      schoolId: targetGroup.schoolId,
+      avatar: '',
       currentStatus: 'outside_school',
-      currentZone: 'Fuera del Plantel (A 2.5 km)',
-      distanceToCampusMeters: 2500,
+      currentZone: 'Sin ubicación registrada',
+      distanceToCampusMeters: 0,
       lastUpdated: simulatedTime,
+      active: true,
     };
+    const updatedGroup = { ...targetGroup, studentIds: [...new Set([...targetGroup.studentIds, newStudentId])] };
 
-    setStudents((prev) => [...prev, newStudent]);
-    setGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId ? { ...g, studentIds: [...g.studentIds, newStudentId] } : g
-      )
-    );
+    try {
+      await syncStudentAndGroupToCloud(newStudent, updatedGroup);
+      setStudents((prev) => [...prev, newStudent]);
+      setGroups((prev) => prev.map((group) => group.id === groupId ? updatedGroup : group));
+    } catch (error) {
+      console.error('No se pudo completar la inscripción del alumno en Firestore:', error);
+      throw new Error('No se pudo guardar la inscripción en Firestore. Verifica los permisos y vuelve a intentarlo.');
+    }
   };
 
-  // 13. Orientador imports students via CSV
-  const handleImportStudentsCsv = (groupId: string, csvData: { name: string; matricula: string }[]) => {
-    const newStudents: Student[] = csvData.map((row, idx) => ({
-      id: `stu-csv-${Date.now()}-${idx}`,
+  const handleOrientadorUpdateStudent = async (input: Student) => {
+    if (currentUser?.role !== 'orientador' || !currentUser.schoolId || !currentOrientadorEntity) throw new Error('Solo orientación autenticada puede modificar alumnos.');
+    const existing = students.find((item) => item.id === input.id && item.schoolId === currentUser.schoolId);
+    if (!existing) throw new Error('No se encontró el alumno de este plantel.');
+    const group = groups.find((item) => item.id === existing.groupId && item.schoolId === currentUser.schoolId);
+    if (!group || (group.orientadorId !== currentOrientadorEntity.id && group.temporarySubstituteOrientadorId !== currentOrientadorEntity.id)) throw new Error('No tienes asignado este grupo.');
+    if (input.groupId !== existing.groupId || input.schoolId !== existing.schoolId) throw new Error('Orientación no puede mover alumnos entre grupos o planteles.');
+    const name = input.name.trim(), matricula = input.matricula.trim();
+    if (!name || !matricula) throw new Error('Nombre y matrícula son obligatorios.');
+    if (students.some((item) => item.id !== input.id && item.schoolId === currentUser.schoolId && item.matricula.trim().toLocaleLowerCase('es-MX') === matricula.toLocaleLowerCase('es-MX'))) throw new Error('La matrícula ya está registrada en este plantel.');
+    const record: Student = { ...existing, name, matricula, active: input.active !== false, lastUpdated: new Date().toISOString() };
+    await syncStudentToCloud(record);
+    setStudents((prev) => prev.map((item) => item.id === record.id ? record : item));
+  };
+
+  // 13. Import students only after Firestore confirms each write.
+  const handleImportStudentsCsv = async (groupId: string, csvData: { name: string; matricula: string; email?: string }[]) => {
+    if (!currentUser?.schoolId || !['director', 'orientador'].includes(currentUser.role)) {
+      throw new Error('Solo dirección u orientación con plantel asignado puede importar alumnos.');
+    }
+    const targetGroup = groups.find((group) => group.id === groupId && group.schoolId === currentUser.schoolId && group.active !== false);
+    if (!targetGroup) throw new Error('El grupo destino no está activo o no pertenece a este plantel.');
+    if (currentUser.role === 'orientador'
+      && targetGroup.orientadorId !== currentOrientadorEntity?.id
+      && targetGroup.temporarySubstituteOrientadorId !== currentOrientadorEntity?.id) {
+      throw new Error('Solo puedes importar alumnos a grupos que tienes asignados como responsable o suplente.');
+    }
+    if (!csvData.length) throw new Error('El archivo no contiene alumnos válidos.');
+    if (csvData.length > 450) throw new Error('Importa máximo 450 alumnos por archivo. Divide la lista en archivos más pequeños.');
+
+    const existingMatriculas = new Set(students
+      .filter((student) => student.schoolId === currentUser.schoolId)
+      .map((student) => student.matricula.trim().toLocaleLowerCase('es-MX')));
+    const seen = new Set<string>();
+    const cleanRows = csvData.map((row) => ({ name: row.name.trim(), matricula: row.matricula.trim(), email: row.email?.trim().toLowerCase() || '' }));
+    for (const row of cleanRows) {
+      const key = row.matricula.toLocaleLowerCase('es-MX');
+      if (!row.name || !row.matricula) throw new Error('Cada fila debe tener nombre y matrícula.');
+      if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) throw new Error('El correo de ' + row.name + ' no tiene un formato válido.');
+      if (seen.has(key)) throw new Error('El archivo contiene matrículas repetidas.');
+      if (existingMatriculas.has(key)) throw new Error('La matrícula ' + row.matricula + ' ya está registrada en el plantel.');
+      seen.add(key);
+    }
+
+    const batchId = Date.now();
+    const newStudents: Student[] = cleanRows.map((row, idx): Student => ({
+      id: `stu-csv-${batchId}-${idx}`,
       name: row.name,
       matricula: row.matricula,
+      ...(row.email ? { email: row.email } : {}),
       groupId,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      schoolId: targetGroup.schoolId as string,
+      avatar: '',
       currentStatus: 'outside_school',
-      currentZone: 'Fuera del Plantel (A 2.5 km)',
-      distanceToCampusMeters: 2500,
-      lastUpdated: simulatedTime,
+      currentZone: 'Sin ubicación registrada',
+      distanceToCampusMeters: 0,
+      lastUpdated: new Date().toISOString(),
+      active: true,
     }));
+    const updatedGroup = {
+      ...targetGroup,
+      studentIds: [...new Set([...targetGroup.studentIds, ...newStudents.map((student) => student.id)])],
+    };
 
+    // Commit every student and the destination group atomically; no partial roster on failure.
+    try {
+      await syncStudentsAndGroupToCloud(newStudents, updatedGroup);
+    } catch (error) {
+      console.error('La importación no se confirmó en Firestore:', error);
+      throw new Error('No se pudo completar la importación. No se confirmó ningún cambio del lote; revisa los permisos de Firestore.');
+    }
     setStudents((prev) => [...prev, ...newStudents]);
-    setGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId
-          ? { ...g, studentIds: [...g.studentIds, ...newStudents.map((s) => s.id)] }
-          : g
-      )
-    );
-  };
-
-  // 14. Teacher regenerates PIN
-  const handleRegeneratePin = () => {
-    const newCode = Math.floor(1000 + Math.random() * 9000).toString();
-    setGroups((prev) =>
-      prev.map((g) => {
-        if (g.id === activeTeacherGroup.id) {
-          return {
-            ...g,
-            schedule: g.schedule.map((s, idx) => (idx === 0 ? { ...s, currentPin: newCode } : s)),
-          };
-        }
-        return g;
-      })
-    );
+    setGroups((prev) => prev.map((group) => group.id === groupId ? updatedGroup : group));
   };
 
   // 15. Teacher manual validate with audit
-  const handleTeacherManualValidate = (studentId: string) => {
-    handleDirectorCorrectAttendance(
+  const handleTeacherManualValidate = async (studentId: string) => {
+    await handleDirectorCorrectAttendance(
       studentId,
       'in_class',
       'Pase de lista presencial por el docente en el aula.'
     );
   };
 
-  // 16. Step-by-Step Simulation Scenario
-  const handleRunScenarioStep = (stepNumber: number) => {
-    setSimulationStep(stepNumber);
-
-    if (stepNumber === 1) {
-      setSimulatedTime('07:05 AM');
-      setStudents((prev) =>
-        prev.map((s) =>
-          s.id === currentStudent.id
-            ? {
-                ...s,
-                currentStatus: 'outside_school',
-                currentZone: 'Fuera del Plantel (A 2.1 km)',
-                distanceToCampusMeters: 2100,
-                etaMinutes: undefined,
-                etaReason: undefined,
-                validatedVia: null,
-                validatedAt: undefined,
-              }
-            : s
-        )
-      );
-      setEtaModalOpen(true);
-      pushNotification(
-        'eta_prompt',
-        'Control de Entrada Escolar',
-        'Aún no registramos tu llegada al plantel. ¿En cuánto tiempo estimas llegar?',
-        'student',
-        { studentId: currentStudent.id, actionRequired: true }
-      );
-    } else if (stepNumber === 2) {
-      setSimulatedTime('07:06 AM');
-      handleStudentSubmitEta(15, 'Tráfico pesado en ruta');
-      setEtaModalOpen(false);
-    } else if (stepNumber === 3) {
-      setSimulatedTime('07:18 AM');
-      handleCrossGate();
-    } else if (stepNumber === 4) {
-      setSimulatedTime('07:20 AM');
-      handleConfirmAttendance('ble_auto', studentActiveClass.beaconUuid);
-    } else if (stepNumber === 5) {
-      setSimulatedTime('08:35 AM');
-      setStudents((prev) =>
-        prev.map((s) =>
-          s.id === currentStudent.id
-            ? {
-                ...s,
-                currentStatus: 'on_campus_not_in_class',
-                currentZone: 'Pasillos Edificio Ciencias',
-                validatedVia: null,
-                validatedAt: undefined,
-              }
-            : s
-        )
-      );
-      pushNotification(
-        'class_unattended',
-        'Inicio de Materia: Física Elemental',
-        'Inicia la clase en Laboratorio 2. Estás dentro de la escuela, pero debes validar presencia en este nuevo salón.',
-        'student',
-        { studentId: currentStudent.id, actionRequired: true }
-      );
+  const handleProvisionDirector = async (schoolId: string) => {
+    if (currentUser?.role !== 'superadmin') throw new Error('Solo superadministración puede crear accesos de dirección.');
+    const school = schools.find((item) => item.id === schoolId);
+    if (!school) throw new Error('No se encontró el plantel registrado.');
+    if (school.status === 'suspended') throw new Error('El plantel está suspendido.');
+    if (!school.directorName?.trim() || !school.directorEmail?.trim()) {
+      throw new Error('Completa el nombre y correo del director en los datos del plantel.');
     }
-  };
-
-  const handleResetSimulation = () => {
-    setStudents(INITIAL_STUDENTS);
-    setGroups(INITIAL_GROUPS);
-    setOrientadores(MOCK_ORIENTADORES);
-    setSimulatedTime('07:05 AM');
-    setSimulationStep(1);
-    setNotifications(INITIAL_NOTIFICATIONS);
-    setEtaModalOpen(false);
-    setCheckinModalOpen(false);
-    setDisputeModalOpen(false);
+    await provisionSchoolAccount({
+      role: 'director',
+      schoolId: school.id,
+      email: school.directorEmail,
+      name: school.directorName,
+    });
   };
 
   // 17. SaaS Multi-School Handlers (Dueño de la App)
-  const handleAddSchool = (newSchool: SchoolInstitution, directorUser: UserAccount) => {
-    setSchools((prev) => [newSchool, ...prev]);
-    setUsersList((prev) => [directorUser, ...prev]);
-    syncSchoolToCloud(newSchool);
-    pushNotification(
-      'info',
-      'Nuevo Plantel Escolar Afiliado',
-      `Se registró la escuela ${newSchool.name} (CCT: ${newSchool.cct}) y se generó el Director ${directorUser.name}.`,
-      'superadmin'
-    );
-  };
-
-  const handleUpdateSchool = (updatedSchool: SchoolInstitution) => {
-    setSchools((prev) => prev.map((s) => (s.id === updatedSchool.id ? updatedSchool : s)));
-    if (currentSchool.id === updatedSchool.id) {
-      setCurrentSchool(updatedSchool);
+  const handleAddSchool = async (newSchool: SchoolInstitution) => {
+    try {
+      // Do not show a school as registered until Firestore confirms persistence.
+      await syncSchoolToCloud(newSchool);
+      setCurrentSchool(newSchool);
+      setSchools((prev) => [newSchool, ...prev.filter((school) => school.id !== newSchool.id)]);
+      pushNotification(
+        'info',
+        'Nuevo Plantel Escolar Afiliado',
+        `Se registró el plantel ${newSchool.name} (CCT: ${newSchool.cct}). El acceso del director deberá aprovisionarse por Firebase Authentication.`,
+        'superadmin'
+      );
+    } catch (error) {
+      console.error('No se pudo guardar el plantel en Firestore:', error);
+      throw new Error('No se pudo registrar el plantel en Firestore. Verifica los permisos y vuelve a intentarlo.');
     }
-    syncSchoolToCloud(updatedSchool);
-    pushNotification(
-      'info',
-      'Parámetros Escolares Actualizados',
-      `Se actualizaron los parámetros técnicos y geocerca de ${updatedSchool.name}.`,
-      'superadmin'
-    );
   };
 
-  const handleSwitchToSchoolDirector = (school: SchoolInstitution) => {
-    setCurrentSchool(school);
-    const dir = usersList.find((u) => u.schoolId === school.id || u.email === school.directorEmail) || {
-      id: `usr-dir-${school.id}`,
-      username: school.directorEmail,
-      password: 'director123',
-      name: school.directorName,
-      email: school.directorEmail,
-      role: 'director' as const,
-      avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
-      title: `Director General · ${school.name}`,
-      schoolId: school.id,
-    };
-    setCurrentUser(dir);
-    pushNotification(
-      'info',
-      `Modo Director Activo`,
-      `Has ingresado al panel de dirección de ${school.name}. Aquí puedes estructurar grupos, orientadores y materias.`,
-      'director'
-    );
-  };
-
-  const handleSwitchUserRole = (role: UserRole) => {
-    const user = usersList.find((u) => u.role === role) || MOCK_USERS.find((u) => u.role === role);
-    if (user) {
-      setCurrentUser(user);
+  const handleUpdateSchool = async (updatedSchool: SchoolInstitution) => {
+    try {
+      // Keep the UI aligned with persisted data if a write is rejected.
+      await syncSchoolToCloud(updatedSchool);
+      setSchools((prev) => prev.map((school) => (school.id === updatedSchool.id ? updatedSchool : school)));
+      if (currentSchool?.id === updatedSchool.id) {
+        setCurrentSchool(updatedSchool);
+      }
+      pushNotification(
+        'info',
+        'Parámetros Escolares Actualizados',
+        `Se actualizaron los parámetros técnicos y geocerca de ${updatedSchool.name}.`,
+        'superadmin'
+      );
+    } catch (error) {
+      console.error('No se pudieron guardar los parámetros del plantel en Firestore:', error);
+      throw new Error('No se pudieron guardar los cambios del plantel en Firestore.');
     }
   };
 
@@ -830,34 +1165,39 @@ export default function App() {
       />
 
       {/* ETA Prompt Modal */}
+      {currentStudent && studentActiveClass && (
       <EtaPromptModal
         isOpen={etaModalOpen}
         onClose={() => setEtaModalOpen(false)}
         onSubmitEta={handleStudentSubmitEta}
-        entryTime={INSTITUTION_INFO.entryTime}
+        entryTime={currentSchool?.entryTime || ''}
         activeClass={studentActiveClass}
         orientador={studentOrientador}
-        studentName={currentStudent.name}
+        studentName={currentStudent?.name || ''}
       />
+      )}
 
       {/* Classroom Check-in Modal */}
+      {currentStudent && studentActiveClass && (
       <ClassCheckinModal
         isOpen={checkinModalOpen}
         onClose={() => setCheckinModalOpen(false)}
         activeClass={studentActiveClass}
-        onConfirmAttendance={handleConfirmAttendance}
       />
+      )}
 
       {/* Student Dispute / Correction Request Modal */}
+      {currentStudent && studentGroup && (
       <DisputeModal
         isOpen={disputeModalOpen}
         onClose={() => setDisputeModalOpen(false)}
-        studentName={currentStudent.name}
-        studentId={currentStudent.id}
-        groupId={currentStudent.groupId}
-        activeSubjectName={studentActiveClass?.subjectName || 'Matemáticas II'}
+        studentName={currentStudent?.name || ''}
+        studentId={currentStudent?.id || ''}
+        groupId={currentStudent?.groupId || ''}
+        activeSubjectName={studentActiveClass?.subjectName || ''}
         onSubmitDispute={handleStudentSubmitDispute}
       />
+      )}
 
       {/* Navbar with role switcher and logout */}
       <Navbar
@@ -865,64 +1205,10 @@ export default function App() {
         simulatedTime={simulatedTime}
         unreadCount={unreadCount}
         onOpenNotifications={() => setNotificationDrawerOpen(true)}
-        onLogout={() => setCurrentUser(null)}
-        onSwitchUser={handleSwitchUserRole}
+        onLogout={() => { void signOut(auth); }}
       />
 
-      {/* Test / Simulation Bar */}
-      <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 text-white">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-indigo-400 font-bold uppercase tracking-wider text-[11px]">
-              Ciclo de Asistencia:
-            </span>
-            <span className="text-slate-300 hidden sm:inline">Paso {simulationStep} de 5:</span>
-            <span className="font-semibold text-white">
-              {simulationStep === 1 && 'Alumno fuera de escuela · Alerta de entrada'}
-              {simulationStep === 2 && 'Alumno reportó ETA de 15m · Orientador y Profesor notificados'}
-              {simulationStep === 3 && 'Llegada al plantel por GPS · No en clase aún'}
-              {simulationStep === 4 && 'Confirmación en aula por BLE · Asistencia oficial'}
-              {simulationStep === 5 && 'Cambio de materia a Física · Nueva validación requerida'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isCloudConnected ? (
-              <span
-                title="Sincronizado en tiempo real con Firebase Firestore"
-                className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-lg border border-emerald-500/30 shadow-2xs"
-              >
-                <CloudCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Nube: Firestore Activo</span>
-              </span>
-            ) : (
-              <span
-                title="Modo local con sincronización diferida"
-                className="inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-400 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700"
-              >
-                <Cloud className="w-3.5 h-3.5 text-slate-400" />
-                <span>Nube: Conectando...</span>
-              </span>
-            )}
-
-            <button
-              type="button"
-              onClick={() => handleRunScenarioStep(simulationStep < 5 ? simulationStep + 1 : 1)}
-              className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Avanzar Paso ({simulationStep < 5 ? simulationStep + 1 : 1})</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleResetSimulation}
-              className="text-slate-400 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              Reiniciar
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Simulation UI removed: the app starts with real school data only. */}
 
       {/* Main Role-Specific View */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -931,9 +1217,11 @@ export default function App() {
           <SuperAdminDashboardView
             currentUser={currentUser}
             schools={schools}
+            students={students}
+            groups={groups}
             onAddSchool={handleAddSchool}
             onUpdateSchool={handleUpdateSchool}
-            onSwitchToSchoolDirector={handleSwitchToSchoolDirector}
+            onProvisionDirector={handleProvisionDirector}
           />
         )}
 
@@ -953,11 +1241,19 @@ export default function App() {
             onCreateNewGroup={handleCreateNewGroup}
             onDirectorCorrectAttendance={handleDirectorCorrectAttendance}
             onResolveDispute={handleResolveDispute}
+            onSaveOrientador={handleSaveOrientador}
+            onSaveTeacher={handleSaveTeacher}
+            onSaveStudent={handleSaveStudent}
+            onSetRosterActive={handleSetRosterActive}
+            onImportStudentsCsv={handleImportStudentsCsv}
+            onProvisionAccount={handleProvisionAccount}
+            onUpdateDirectorGroup={handleUpdateDirectorGroup}
+            staffSubscriptionError={staffSubscriptionError}
           />
         )}
 
         {/* ROLE 2: ORIENTADOR */}
-        {currentUser.role === 'orientador' && (
+        {currentUser.role === 'orientador' && currentOrientadorEntity && (
           <OrientadorDashboardView
             orientador={currentOrientadorEntity}
             allGroups={groups}
@@ -965,46 +1261,29 @@ export default function App() {
             allTeachers={teachers}
             disputes={disputes}
             simulatedTime={simulatedTime}
+            onCreateGroup={handleCreateGroupForOrientador}
             onUpdateGroupSchedule={handleUpdateGroupSchedule}
             onAddStudentToGroup={handleAddStudentToGroup}
+            onUpdateStudent={handleOrientadorUpdateStudent}
             onImportStudentsCsv={handleImportStudentsCsv}
-            onSendAlertToStudent={(stId, stName) => {
-              pushNotification(
-                'class_unattended',
-                `Aviso de Orientación a ${stName}`,
-                `El Orientador ${currentOrientadorEntity.name} solicita tu presencia inmediata en el salón de clase.`,
-                'student',
-                { studentId: stId, actionRequired: true }
-              );
-            }}
             onResolveDispute={handleResolveDispute}
           />
         )}
 
         {/* ROLE 3: DOCENTE */}
-        {currentUser.role === 'teacher' && (
+        {currentUser.role === 'teacher' && activeTeacherGroup && (
           <TeacherDashboardView
             teacher={currentUser}
             activeGroup={activeTeacherGroup}
             allTeacherGroups={teacherAssignedGroups}
             students={students}
             onSelectGroup={setActiveTeacherGroup}
-            onRegeneratePin={handleRegeneratePin}
-            onSendStudentAlert={(stId, stName) => {
-              pushNotification(
-                'class_unattended',
-                `Aviso del Docente a ${stName}`,
-                `El docente solicita tu presencia inmediata en el aula.`,
-                'student',
-                { studentId: stId, actionRequired: true }
-              );
-            }}
             onManualValidateStudent={handleTeacherManualValidate}
           />
         )}
 
         {/* ROLE 4: ALUMNO */}
-        {currentUser.role === 'student' && (
+        {currentUser.role === 'student' && currentStudent && studentGroup && studentActiveClass && (
           <StudentAppView
             student={currentStudent}
             studentGroup={studentGroup}
@@ -1014,15 +1293,26 @@ export default function App() {
             onOpenEtaModal={() => setEtaModalOpen(true)}
             onOpenCheckinModal={() => setCheckinModalOpen(true)}
             onOpenDisputeModal={() => setDisputeModalOpen(true)}
-            onSimulateCrossGate={handleCrossGate}
           />
+        )}
+        {currentUser.role === 'student' && (!currentStudent || !studentGroup || !studentActiveClass) && (
+          <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Tu perfil escolar aún no está configurado</h2>
+            <p className="mt-2 text-sm text-slate-600">Cuando la escuela te inscriba en un grupo y tenga un horario asignado, aquí aparecerá tu información real.</p>
+          </div>
+        )}
+        {currentUser.role === 'teacher' && !activeTeacherGroup && (
+          <div className="mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900">Todavía no tienes grupos asignados</h2>
+            <p className="mt-2 text-sm text-slate-600">Cuando se cree un grupo y se te asigne una clase, aparecerá aquí.</p>
+          </div>
         )}
       </main>
 
       {/* Footer */}
       <footer className="mt-auto border-t border-slate-200 bg-white py-4 px-6 text-center text-xs text-slate-500">
         <p>
-          {INSTITUTION_INFO.name} · {INSTITUTION_INFO.tagline} · Sesión activa: {currentUser.name} ({currentUser.title})
+          AulaControl · Sistema de asistencia escolar · Sesión activa: {currentUser.name} ({currentUser.title})
         </p>
       </footer>
     </div>

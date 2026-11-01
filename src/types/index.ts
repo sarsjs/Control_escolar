@@ -61,6 +61,8 @@ export interface AttendanceRecord {
 
 export interface AuditLogEntry {
   id: string;
+  schoolId?: string;
+  modifiedById?: string;
   attendanceId: string;
   studentId: string;
   studentName: string;
@@ -76,6 +78,7 @@ export interface AuditLogEntry {
 
 export interface AttendanceDispute {
   id: string;
+  schoolId: string;
   attendanceId: string;
   studentId: string;
   studentName: string;
@@ -91,8 +94,10 @@ export interface AttendanceDispute {
 
 export interface Student {
   id: string;
+  schoolId?: string;
   name: string;
   matricula: string;
+  email?: string; // Optional account email; required only when provisioning student login
   groupId: string;
   avatar: string;
   currentStatus: StudentPresenceStatus;
@@ -105,6 +110,7 @@ export interface Student {
   validatedVia?: ValidationMethod | null;
   validatedAt?: string;
   bleDeviceId?: string; // Optional registered Bluetooth hardware identifier
+  active?: boolean; // Soft deactivation preserves enrollment and attendance history
 }
 
 export interface GroupScheduleItem {
@@ -127,6 +133,7 @@ export interface GroupScheduleItem {
 
 export interface SchoolGroup {
   id: string;
+  schoolId?: string;
   name: string; // e.g. "1º Semestre · Grupo A"
   semester: number;
   turn: 'Matutino' | 'Vespertino';
@@ -134,25 +141,43 @@ export interface SchoolGroup {
   temporarySubstituteOrientadorId?: string; // Sustitución autorizada por Director
   studentIds: string[];
   schedule: GroupScheduleItem[];
+  active?: boolean; // Soft archive; preserves attendance and enrollment history
 }
 
 export interface Orientador {
   id: string;
+  schoolId?: string;
   name: string;
   email: string;
   avatar: string;
   phone: string;
   cubicle: string;
   assignedGroupIds: string[];
+  active?: boolean;
 }
 
 export interface Teacher {
   id: string;
+  schoolId?: string;
   name: string;
   email: string;
   avatar: string;
   specialty: string;
   assignedGroupIds: string[];
+  active?: boolean;
+}
+
+export interface EtaReport {
+  id: string;
+  schoolId: string;
+  studentId: string;
+  studentName: string;
+  groupId: string;
+  groupName: string;
+  etaMinutes: number;
+  reason: string;
+  createdAt: string;
+  status: 'pending';
 }
 
 export interface SystemNotification {

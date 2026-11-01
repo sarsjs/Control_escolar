@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DirectorPeopleManagement } from './DirectorPeopleManagement';
 import {
   Orientador,
   SchoolGroup,
@@ -36,15 +37,23 @@ interface DirectorDashboardViewProps {
   auditLogs: AuditLogEntry[];
   disputes: AttendanceDispute[];
   simulatedTime: string;
-  onReassignGroupToOrientador: (groupId: string, newOrientadorId: string) => void;
-  onAssignTemporarySubstitute: (groupId: string, substituteOrientadorId?: string) => void;
-  onCreateNewGroup?: (name: string, semester: number, orientadorId: string) => void;
+  onReassignGroupToOrientador: (groupId: string, newOrientadorId: string) => Promise<void>;
+  onAssignTemporarySubstitute: (groupId: string, substituteOrientadorId?: string) => Promise<void>;
+  onCreateNewGroup?: (name: string, semester: number, orientadorId: string) => Promise<void>;
   onDirectorCorrectAttendance: (
     studentId: string,
     newStatus: StudentPresenceStatus,
     reason: string
-  ) => void;
+  ) => Promise<void>;
   onResolveDispute: (disputeId: string, approved: boolean, notes: string) => void;
+  onSaveOrientador: (input: { id?: string; name: string; email: string; phone: string; cubicle: string }) => Promise<void>;
+  onSaveTeacher: (input: { id?: string; name: string; email: string; specialty: string }) => Promise<void>;
+  onSaveStudent: (input: { id?: string; name: string; matricula: string; email: string; groupId: string }) => Promise<void>;
+  onSetRosterActive: (kind: 'orientador' | 'teacher' | 'student', id: string, active: boolean) => Promise<void>;
+  onImportStudentsCsv: (groupId: string, rows: { name: string; matricula: string; email?: string }[]) => Promise<void>;
+  onProvisionAccount: (kind: 'orientador' | 'teacher' | 'student', id: string) => Promise<void>;
+  onUpdateDirectorGroup: (input: { id: string; name: string; semester: number; turn: 'Matutino' | 'Vespertino'; orientadorId: string; active: boolean }) => Promise<void>;
+  staffSubscriptionError?: string;
 }
 
 export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
@@ -61,9 +70,27 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
   onCreateNewGroup,
   onDirectorCorrectAttendance,
   onResolveDispute,
+  onSaveOrientador,
+  onSaveTeacher,
+  onSaveStudent,
+  onSetRosterActive,
+  onImportStudentsCsv,
+  onProvisionAccount,
+  onUpdateDirectorGroup,
+  staffSubscriptionError,
 }) => {
-  const [activeTab, setActiveTab] = useState<'matrix' | 'audit' | 'groups' | 'disputes'>('matrix');
+  const [activeTab, setActiveTab] = useState<'matrix' | 'audit' | 'attendance' | 'groups' | 'disputes' | 'people'>('people');
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [groupCreateError, setGroupCreateError] = useState<string>('');
+  const [editingGroupId, setEditingGroupId] = useState('');
+  const [editGroupName, setEditGroupName] = useState('');
+  const [editGroupSemester, setEditGroupSemester] = useState(1);
+  const [editGroupTurn, setEditGroupTurn] = useState<'Matutino' | 'Vespertino'>('Matutino');
+  const [editGroupOrientador, setEditGroupOrientador] = useState('');
+  const [editGroupActive, setEditGroupActive] = useState(true);
+  const [groupBusy, setGroupBusy] = useState(false);
+  const [groupError, setGroupError] = useState('');
+  const [groupActionError, setGroupActionError] = useState('');
 
   // Modals
   const [isAddGroupOpen, setIsAddGroupOpen] = useState<boolean>(false);
@@ -75,52 +102,78 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
   const [correctingStudent, setCorrectingStudent] = useState<Student | null>(null);
   const [newCorrectedStatus, setNewCorrectedStatus] = useState<StudentPresenceStatus>('in_class');
   const [correctionReason, setCorrectionReason] = useState<string>('');
+  const [correctionError, setCorrectionError] = useState<string>('');
+  const [correctionBusy, setCorrectionBusy] = useState(false);
 
-  const totalStudents = students.length;
-  const inClassCount = students.filter((s) => s.currentStatus === 'in_class').length;
-  const onCampusOutsideCount = students.filter((s) => s.currentStatus === 'on_campus_not_in_class').length;
-  const enRouteCount = students.filter((s) => s.currentStatus === 'en_route_delayed').length;
-  const absentCount = students.filter((s) => s.currentStatus === 'outside_school' || s.currentStatus === 'absent').length;
+  const activeStudents = students.filter((student) => student.active !== false);
+  const totalStudents = activeStudents.length;
+  const inClassCount = activeStudents.filter((student) => student.currentStatus === 'in_class').length;
+  const onCampusOutsideCount = activeStudents.filter((student) => student.currentStatus === 'on_campus_not_in_class').length;
+  const enRouteCount = activeStudents.filter((student) => student.currentStatus === 'en_route_delayed').length;
+  const absentCount = activeStudents.filter((student) => student.currentStatus === 'outside_school' || student.currentStatus === 'absent').length;
 
-  const handleReassign = (groupId: string, orientadorId: string) => {
-    onReassignGroupToOrientador(groupId, orientadorId);
-    const grp = groups.find((g) => g.id === groupId);
-    const ori = orientadores.find((o) => o.id === orientadorId);
-    setSuccessMessage(`Se ha asignado ${grp?.name} permanentemente a ${ori?.name}.`);
-    setTimeout(() => setSuccessMessage(''), 4000);
+  const handleReassign = async (groupId: string, orientadorId: string) => {
+    setGroupActionError('');
+    try {
+      await onReassignGroupToOrientador(groupId, orientadorId);
+      const grp = groups.find((g) => g.id === groupId);
+      const ori = orientadores.find((o) => o.id === orientadorId);
+      setSuccessMessage(`Se ha asignado ${grp?.name} permanentemente a ${ori?.name}.`);
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (error) {
+      setGroupActionError(error instanceof Error ? error.message : 'No se pudo reasignar el grupo.');
+    }
   };
 
-  const handleSubstitute = (groupId: string, substituteId: string) => {
-    onAssignTemporarySubstitute(groupId, substituteId === 'none' ? undefined : substituteId);
-    const grp = groups.find((g) => g.id === groupId);
-    const sub = orientadores.find((o) => o.id === substituteId);
-    setSuccessMessage(
-      sub
-        ? `Sustitución temporal asignada para ${grp?.name} a cargo de ${sub.name}.`
-        : `Sustitución temporal finalizada para ${grp?.name}. Retorna al Orientador titular.`
-    );
-    setTimeout(() => setSuccessMessage(''), 4000);
+  const handleSubstitute = async (groupId: string, substituteId: string) => {
+    setGroupActionError('');
+    try {
+      await onAssignTemporarySubstitute(groupId, substituteId === 'none' ? undefined : substituteId);
+      const grp = groups.find((g) => g.id === groupId);
+      const sub = orientadores.find((o) => o.id === substituteId);
+      setSuccessMessage(
+        sub
+          ? `Sustitución temporal asignada para ${grp?.name} a cargo de ${sub.name}.`
+          : `Sustitución temporal finalizada para ${grp?.name}. Retorna al Orientador titular.`
+      );
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (error) {
+      setGroupActionError(error instanceof Error ? error.message : 'No se pudo actualizar la sustitución.');
+    }
   };
 
-  const handleCreateGroup = (e: React.FormEvent) => {
+  const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim() || !onCreateNewGroup) return;
-    onCreateNewGroup(newGroupName, newGroupSemester, newGroupOrientador);
-    setNewGroupName('');
-    setIsAddGroupOpen(false);
-    setSuccessMessage('Nuevo grupo registrado y asignado exitosamente.');
-    setTimeout(() => setSuccessMessage(''), 4000);
+    setGroupCreateError('');
+    try {
+      await onCreateNewGroup(newGroupName.trim(), newGroupSemester, newGroupOrientador);
+      setNewGroupName('');
+      setIsAddGroupOpen(false);
+      setSuccessMessage('Nuevo grupo guardado correctamente.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (error) {
+      console.error('No se pudo guardar el grupo:', error);
+      setGroupCreateError('No se pudo guardar el grupo. Verifica tu conexión y permisos; no se registró como creado.');
+    }
   };
 
-  const handleSaveCorrection = (e: React.FormEvent) => {
+  const handleSaveCorrection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!correctingStudent || !correctionReason.trim()) return;
-
-    onDirectorCorrectAttendance(correctingStudent.id, newCorrectedStatus, correctionReason);
-    setSuccessMessage(`Asistencia corregida para ${correctingStudent.name}. Registrado en auditoría.`);
-    setCorrectingStudent(null);
-    setCorrectionReason('');
-    setTimeout(() => setSuccessMessage(''), 4000);
+    setCorrectionError('');
+    setCorrectionBusy(true);
+    try {
+      await onDirectorCorrectAttendance(correctingStudent.id, newCorrectedStatus, correctionReason);
+      setSuccessMessage(`Asistencia corregida para ${correctingStudent.name}. Registrado en auditoría.`);
+      setCorrectingStudent(null);
+      setCorrectionReason('');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (error) {
+      setCorrectionError(error instanceof Error ? error.message : 'No se pudo guardar la corrección.');
+    } finally {
+      setCorrectionBusy(false);
+    }
   };
 
   return (
@@ -168,6 +221,18 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
         </div>
       )}
 
+      {groupActionError && (
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+          {groupActionError}
+        </div>
+      )}
+
+      {groupCreateError && (
+        <div role="alert" className="p-4 bg-rose-50 border border-rose-300 rounded-2xl text-xs text-rose-800 font-medium">
+          {groupCreateError}
+        </div>
+      )}
+
       {/* KPI Stats of School */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
@@ -185,14 +250,14 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
             <span className="text-2xl font-black font-mono text-emerald-700">{inClassCount}</span>
             <span className="text-xs text-emerald-600">acreditados</span>
           </div>
-          <span className="text-[11px] text-emerald-700 mt-1 block">Validaron BLE / PIN</span>
+          <span className="text-[11px] text-emerald-700 mt-1 block">Pase manual o corrección autorizada</span>
         </div>
 
         <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200">
-          <span className="text-xs font-semibold text-amber-900">En Campus Fuera de Aula</span>
+          <span className="text-xs font-semibold text-amber-900">Marcados en Plantel sin Aula</span>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-2xl font-black font-mono text-amber-600">{onCampusOutsideCount}</span>
-            <span className="text-xs text-amber-800 font-semibold">deambulando</span>
+            <span className="text-xs text-amber-800 font-semibold">sin validación de salón</span>
           </div>
           <span className="text-[11px] text-amber-700 mt-1 block">En pasillos durante clase</span>
         </div>
@@ -209,8 +274,15 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
 
       {/* Tabs */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-        <div className="border-b border-slate-200 px-6 flex items-center justify-between gap-4 overflow-x-auto bg-slate-50/70">
-          <div className="flex items-center gap-2 py-2">
+        <div className="border-b border-slate-200 px-3 sm:px-6 flex items-center justify-between gap-4 bg-slate-50/70">
+          <div className="flex flex-wrap items-center gap-2 py-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('people')}
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${activeTab === 'people' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              Personal y Alumnos
+            </button>
             <button
               type="button"
               onClick={() => setActiveTab('matrix')}
@@ -222,13 +294,14 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('groups')}
+              onClick={() => setActiveTab('attendance')}
               className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
-                activeTab === 'groups' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                activeTab === 'attendance' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Supervisión y Corrección de Asistencias
             </button>
+            <button type="button" onClick={() => setActiveTab('groups')} className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${activeTab === 'groups' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>Administración de Grupos</button>
             <button
               type="button"
               onClick={() => setActiveTab('audit')}
@@ -249,6 +322,44 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
             </button>
           </div>
         </div>
+
+        {activeTab === 'people' && (
+          <DirectorPeopleManagement
+            orientadores={orientadores}
+            teachers={teachers}
+            students={students}
+            groups={groups}
+            syncError={staffSubscriptionError}
+            onSaveOrientador={onSaveOrientador}
+            onSaveTeacher={onSaveTeacher}
+            onSaveStudent={onSaveStudent}
+            onSetRosterActive={onSetRosterActive}
+            onImportStudentsCsv={onImportStudentsCsv}
+            onProvisionAccount={onProvisionAccount}
+          />
+        )}
+
+        {activeTab === 'groups' && (
+          <div className="space-y-4 p-4 sm:p-6">
+            <div><h3 className="text-base font-bold text-slate-900">Administración de grupos</h3><p className="mt-1 text-sm text-slate-500">Edita nombre, semestre, turno y orientador. Archivar conserva alumnos e historial de asistencia.</p></div>
+            {groupError && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{groupError}</p>}
+            {groups.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">Todavía no hay grupos registrados.</p>}
+            <div className="grid gap-3 lg:grid-cols-2">{groups.map((group) => {
+              const isEditing = editingGroupId === group.id;
+              return <article key={group.id} className="space-y-3 rounded-2xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-3"><div><p className="font-bold text-slate-900">{group.name}</p><p className="mt-1 text-xs text-slate-500">{group.semester}° semestre · {group.turn} · {group.studentIds.length} alumnos</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${group.active === false ? 'bg-slate-100 text-slate-500' : 'bg-emerald-50 text-emerald-700'}`}>{group.active === false ? 'ARCHIVADO' : 'ACTIVO'}</span></div>
+                {isEditing ? <form className="grid gap-3 sm:grid-cols-2" onSubmit={async (event) => { event.preventDefault(); setGroupBusy(true); setGroupError(''); try { await onUpdateDirectorGroup({ id: group.id, name: editGroupName, semester: editGroupSemester, turn: editGroupTurn, orientadorId: editGroupOrientador, active: editGroupActive }); setEditingGroupId(''); setSuccessMessage('Grupo actualizado correctamente.'); setTimeout(() => setSuccessMessage(''), 4000); } catch (error) { setGroupError(error instanceof Error ? error.message : 'No se pudo actualizar el grupo.'); } finally { setGroupBusy(false); } }}>
+                  <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Nombre<input className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" value={editGroupName} onChange={(e) => setEditGroupName(e.target.value)} required maxLength={100}/></label>
+                  <label className="text-xs font-semibold text-slate-600">Semestre<select className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" value={editGroupSemester} onChange={(e) => setEditGroupSemester(Number(e.target.value))}>{[1,2,3,4,5,6].map((n) => <option key={n} value={n}>{n}° semestre</option>)}</select></label>
+                  <label className="text-xs font-semibold text-slate-600">Turno<select className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" value={editGroupTurn} onChange={(e) => setEditGroupTurn(e.target.value as 'Matutino' | 'Vespertino')}><option>Matutino</option><option>Vespertino</option></select></label>
+                  <label className="text-xs font-semibold text-slate-600 sm:col-span-2">Orientador<select className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" value={editGroupOrientador} onChange={(e) => setEditGroupOrientador(e.target.value)}><option value="">Sin orientador</option>{orientadores.filter((o) => o.active !== false).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 sm:col-span-2"><input type="checkbox" checked={editGroupActive} onChange={(e) => setEditGroupActive(e.target.checked)}/> Grupo activo (desmarcar para archivarlo)</label>
+                  <div className="flex gap-2 sm:col-span-2"><button type="submit" disabled={groupBusy} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{groupBusy ? 'Guardando…' : 'Guardar cambios'}</button><button type="button" className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold" onClick={() => setEditingGroupId('')}>Cancelar</button></div>
+                </form> : <button type="button" className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50" onClick={() => { setEditingGroupId(group.id); setEditGroupName(group.name); setEditGroupSemester(group.semester); setEditGroupTurn(group.turn); setEditGroupOrientador(group.orientadorId || ''); setEditGroupActive(group.active !== false); setGroupError(''); }}>Editar grupo</button>}
+              </article>;
+            })}</div>
+          </div>
+        )}
 
         {/* TAB 1: MATRIZ DE REPARTO Y SUSTITUCIONES */}
         {activeTab === 'matrix' && (
@@ -366,7 +477,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
         )}
 
         {/* TAB 2: SUPERVISIÓN Y CORRECCIÓN DE ASISTENCIAS */}
-        {activeTab === 'groups' && (
+        {activeTab === 'attendance' && (
           <div className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -589,6 +700,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
             </p>
 
             <form onSubmit={handleSaveCorrection} className="space-y-4">
+              {correctionError && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{correctionError}</p>}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Nuevo Estado de Asistencia
@@ -629,10 +741,10 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={!correctionReason.trim()}
+                  disabled={!correctionReason.trim() || correctionBusy}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs disabled:opacity-50"
                 >
-                  Guardar Corrección en Auditoría
+                  {correctionBusy ? 'Guardando…' : 'Guardar Corrección en Auditoría'}
                 </button>
               </div>
             </form>
