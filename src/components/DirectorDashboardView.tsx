@@ -38,7 +38,7 @@ interface DirectorDashboardViewProps {
   disputes: AttendanceDispute[];
   simulatedTime: string;
   onReassignGroupToOrientador: (groupId: string, newOrientadorId: string) => void;
-  onAssignTemporarySubstitute: (groupId: string, substituteOrientadorId?: string) => void;
+  onAssignTemporarySubstitute: (groupId: string, substituteOrientadorId?: string) => Promise<void>;
   onCreateNewGroup?: (name: string, semester: number, orientadorId: string) => Promise<void>;
   onDirectorCorrectAttendance: (
     studentId: string,
