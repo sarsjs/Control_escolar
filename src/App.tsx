@@ -665,7 +665,7 @@ export default function App() {
       const ids = new Set(item.assignedGroupIds || []);
       ids.delete(groupId);
       if (item.id === newOrientadorId) ids.add(groupId);
-      return { ...item, assignedGroupIds: [...ids] };
+      return { ...item, assignedGroupIds: [...ids], schoolId: currentUser.schoolId };
     });
     // Persist the authoritative group assignment before updating the visible state.
     await syncGroupToCloud(updatedGroup);
