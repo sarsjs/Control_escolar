@@ -1044,6 +1044,22 @@ export default function App() {
     );
   };
 
+  const handleProvisionDirector = async (schoolId: string) => {
+    if (currentUser?.role !== 'superadmin') throw new Error('Solo superadministración puede crear accesos de dirección.');
+    const school = schools.find((item) => item.id === schoolId);
+    if (!school) throw new Error('No se encontró el plantel registrado.');
+    if (school.status === 'suspended') throw new Error('El plantel está suspendido.');
+    if (!school.directorName?.trim() || !school.directorEmail?.trim()) {
+      throw new Error('Completa el nombre y correo del director en los datos del plantel.');
+    }
+    await provisionSchoolAccount({
+      role: 'director',
+      schoolId: school.id,
+      email: school.directorEmail,
+      name: school.directorName,
+    });
+  };
+
   // 17. SaaS Multi-School Handlers (Dueño de la App)
   const handleAddSchool = async (newSchool: SchoolInstitution) => {
     try {
@@ -1195,6 +1211,7 @@ export default function App() {
             schools={schools}
             onAddSchool={handleAddSchool}
             onUpdateSchool={handleUpdateSchool}
+            onProvisionDirector={handleProvisionDirector}
           />
         )}
 
