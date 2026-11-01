@@ -37,7 +37,7 @@ interface OrientadorDashboardViewProps {
   onUpdateGroupSchedule: (groupId: string, newSchedule: GroupScheduleItem[]) => void;
   onAddStudentToGroup: (groupId: string, studentName: string, matricula: string) => void;
   onUpdateStudent: (student: Student) => void;
-  onImportStudentsCsv: (groupId: string, csvData: { name: string; matricula: string }[]) => void;
+  onImportStudentsCsv: (groupId: string, csvData: { name: string; matricula: string; email?: string }[]) => Promise<void>;
   onSendAlertToStudent: (studentId: string, studentName: string) => void;
   onResolveDispute: (disputeId: string, approved: boolean, notes: string) => void;
 }
@@ -93,6 +93,8 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   const [isCsvModalOpen, setIsCsvModalOpen] = useState<boolean>(false);
   const [csvRawText, setCsvRawText] = useState<string>('');
   const [csvSuccessMessage, setCsvSuccessMessage] = useState<string>('');
+  const [csvErrorMessage, setCsvErrorMessage] = useState<string>('');
+  const [csvImportBusy, setCsvImportBusy] = useState(false);
 
   const currentGroup = myGroups.find((g) => g.id === selectedGroupId) || myGroups[0];
 
@@ -197,30 +199,62 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
     setIsAddStudentOpen(false);
   };
 
-  const handleProcessCsvImport = (e: React.FormEvent) => {
+  const handleProcessCsvImport = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentGroup || !csvRawText.trim()) return;
-
-    const lines = csvRawText.trim().split('\n');
-    const parsed: { name: string; matricula: string }[] = [];
-
-    for (const line of lines) {
-      const parts = line.split(',');
-      if (parts.length >= 2) {
-        parsed.push({
-          name: parts[0].trim(),
-          matricula: parts[1].trim(),
-        });
-      }
+    setCsvErrorMessage('');
+    setCsvSuccessMessage('');
+    if (!currentGroup || !csvRawText.trim()) {
+      setCsvErrorMessage('Selecciona un grupo y pega la lista de alumnos.');
+      return;
     }
 
-    if (parsed.length > 0) {
-      onImportStudentsCsv(currentGroup.id, parsed);
-      setCsvSuccessMessage(`Se importaron ${parsed.length} alumnos con éxito.`);
-      setTimeout(() => {
-        setCsvSuccessMessage('');
-        setIsCsvModalOpen(false);
-      }, 1500);
+    const lines = csvRawText.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim());
+    const parsed: { name: string; matricula: string }[] = [];
+    const seen = new Set<string>();
+    const existingMatriculas = new Set(allStudents
+      .filter((student) => student.schoolId === orientador.schoolId)
+      .map((student) => student.matricula.trim().toLocaleLowerCase('es-MX')));
+    const errors: string[] = [];
+
+    lines.forEach((line, index) => {
+      const parts = line.split(',').map((part) => part.trim().replace(/^"|"$/g, ''));
+      const headerName = (parts[0] || '').toLocaleLowerCase('es-MX');
+      const headerMatricula = (parts[1] || '').toLocaleLowerCase('es-MX');
+      if (index === 0 && ['nombre', 'nombre completo', 'nombres'].includes(headerName) && ['matricula', 'matrícula'].includes(headerMatricula)) return;
+      const name = parts[0] || '';
+      const matricula = parts[1] || '';
+      if (!name || !matricula) {
+        errors.push('Fila ' + (index + 1) + ': se requieren nombre y matrícula separados por coma.');
+        return;
+      }
+      const key = matricula.toLocaleLowerCase('es-MX');
+      if (seen.has(key)) errors.push('Fila ' + (index + 1) + ': matrícula repetida en el archivo (' + matricula + ').');
+      else if (existingMatriculas.has(key)) errors.push('Fila ' + (index + 1) + ': la matrícula ' + matricula + ' ya existe en el plantel.');
+      else {
+        seen.add(key);
+        parsed.push({ name, matricula });
+      }
+    });
+
+    if (parsed.length > 450) errors.push('El archivo supera el máximo de 450 alumnos por lote.');
+    if (errors.length) {
+      setCsvErrorMessage(errors.slice(0, 8).join(' '));
+      return;
+    }
+    if (!parsed.length) {
+      setCsvErrorMessage('No se encontraron alumnos válidos para importar.');
+      return;
+    }
+
+    setCsvImportBusy(true);
+    try {
+      await onImportStudentsCsv(currentGroup.id, parsed);
+      setCsvSuccessMessage('Firestore confirmó la inscripción de ' + parsed.length + ' alumno(s).');
+      setCsvRawText('');
+    } catch (error) {
+      setCsvErrorMessage(error instanceof Error ? error.message : 'No se pudo completar la importación.');
+    } finally {
+      setCsvImportBusy(false);
     }
   };
 
@@ -734,9 +768,8 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                     onChange={(e) => setCsvRawText(e.target.value)}
                     className="w-full p-3 font-mono text-xs border border-slate-300 rounded-xl bg-white"
                   />
-                  {csvSuccessMessage && (
-                    <span className="text-xs text-emerald-600 font-bold block">{csvSuccessMessage}</span>
-                  )}
+                  {csvSuccessMessage && <span role="status" className="text-xs text-emerald-600 font-bold block">{csvSuccessMessage}</span>}
+                  {csvErrorMessage && <span role="alert" className="text-xs text-rose-700 font-semibold block">{csvErrorMessage}</span>}
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
@@ -747,9 +780,10 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs"
+                      disabled={csvImportBusy}
+                      className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs disabled:opacity-50"
                     >
-                      Procesar e Inscribir Alumnos
+                      {csvImportBusy ? 'Importando…' : 'Procesar e Inscribir Alumnos'}
                     </button>
                   </div>
                 </form>
