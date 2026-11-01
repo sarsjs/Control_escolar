@@ -679,10 +679,31 @@ export default function App() {
   };
 
   // 9. Director assigns temporary substitute orientador
-  const handleAssignTemporarySubstitute = (groupId: string, substituteOrientadorId?: string) => {
-    setGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, temporarySubstituteOrientadorId: substituteOrientadorId } : g))
-    );
+  const handleAssignTemporarySubstitute = async (groupId: string, substituteOrientadorId?: string) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) {
+      throw new Error('Solo Dirección puede asignar un orientador sustituto.');
+    }
+    const group = groups.find((item) => item.id === groupId && item.schoolId === currentUser.schoolId);
+    if (!group) throw new Error('No se encontró el grupo de este plantel.');
+    if (substituteOrientadorId) {
+      const substitute = orientadores.find((item) =>
+        item.id === substituteOrientadorId
+        && item.schoolId === currentUser.schoolId
+        && item.active !== false
+      );
+      if (!substitute) throw new Error('Selecciona un orientador sustituto activo de este plantel.');
+      if (substitute.id === group.orientadorId) {
+        throw new Error('El sustituto debe ser distinto del orientador titular.');
+      }
+    }
+    const updatedGroup: SchoolGroup = {
+      ...group,
+      ...(substituteOrientadorId
+        ? { temporarySubstituteOrientadorId: substituteOrientadorId }
+        : { temporarySubstituteOrientadorId: undefined }),
+    };
+    await syncGroupToCloud(updatedGroup);
+    setGroups((prev) => prev.map((item) => item.id === groupId ? updatedGroup : item));
   };
 
 
