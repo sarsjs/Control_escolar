@@ -581,8 +581,16 @@ export default function App() {
   const handleSaveOrientador = async (input: { id?: string; name: string; email: string; phone: string; cubicle: string }) => {
     if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
     const id = input.id || `ori-${Date.now()}`;
+    const name = input.name.trim();
+    const email = input.email.trim().toLowerCase();
+    if (!name) throw new Error('El nombre del orientador es obligatorio.');
+    if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error('El correo electrónico del orientador no es válido.');
+    const duplicateEmail = email && [...orientadores, ...teachers].some((item) =>
+      item.id !== id && item.schoolId === currentUser.schoolId && item.email?.trim().toLowerCase() === email
+    );
+    if (duplicateEmail) throw new Error('Ese correo ya está registrado para otro orientador o docente de este plantel.');
     const existing = orientadores.find((item) => item.id === id);
-    const record = { id, name: input.name.trim(), email: input.email.trim(), phone: input.phone.trim(), cubicle: input.cubicle.trim(), avatar: existing?.avatar || '', assignedGroupIds: existing?.assignedGroupIds || [], active: existing?.active !== false, schoolId: currentUser.schoolId };
+    const record = { id, name, email, phone: input.phone.trim(), cubicle: input.cubicle.trim(), avatar: existing?.avatar || '', assignedGroupIds: existing?.assignedGroupIds || [], active: existing?.active !== false, schoolId: currentUser.schoolId };
     await syncOrientadorToCloud(record);
     setOrientadores((prev) => [...prev.filter((item) => item.id !== id), record]);
   };
@@ -590,8 +598,16 @@ export default function App() {
   const handleSaveTeacher = async (input: { id?: string; name: string; email: string; specialty: string }) => {
     if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
     const id = input.id || `doc-${Date.now()}`;
+    const name = input.name.trim();
+    const email = input.email.trim().toLowerCase();
+    if (!name) throw new Error('El nombre del docente es obligatorio.');
+    if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error('El correo electrónico del docente no es válido.');
+    const duplicateEmail = email && [...orientadores, ...teachers].some((item) =>
+      item.id !== id && item.schoolId === currentUser.schoolId && item.email?.trim().toLowerCase() === email
+    );
+    if (duplicateEmail) throw new Error('Ese correo ya está registrado para otro orientador o docente de este plantel.');
     const existing = teachers.find((item) => item.id === id);
-    const record = { id, name: input.name.trim(), email: input.email.trim(), specialty: input.specialty.trim(), avatar: existing?.avatar || '', assignedGroupIds: existing?.assignedGroupIds || [], active: existing?.active !== false, schoolId: currentUser.schoolId };
+    const record = { id, name, email, specialty: input.specialty.trim(), avatar: existing?.avatar || '', assignedGroupIds: existing?.assignedGroupIds || [], active: existing?.active !== false, schoolId: currentUser.schoolId };
     await syncTeacherToCloud(record);
     setTeachers((prev) => [...prev.filter((item) => item.id !== id), record]);
   };
