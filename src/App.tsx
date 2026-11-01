@@ -432,24 +432,42 @@ export default function App() {
     newStatus: StudentPresenceStatus,
     reason: string
   ) => {
-    const targetStudent = students.find((s) => s.id === studentId);
-    if (!targetStudent) return;
+    if (!currentUser?.id || !currentUser.schoolId) {
+      throw new Error('No se puede validar asistencia sin una sesión escolar válida.');
+    }
+    if (!['superadmin', 'director', 'orientador', 'teacher'].includes(currentUser.role)) {
+      throw new Error('Tu perfil no tiene permiso para validar asistencia.');
+    }
+
+    const targetStudent = students.find((student) =>
+      student.id === studentId && student.schoolId === currentUser.schoolId
+    );
+    if (!targetStudent) throw new Error('No se encontró al alumno en este plantel.');
+
+    const targetGroup = groups.find((group) =>
+      group.id === targetStudent.groupId && group.schoolId === currentUser.schoolId
+    );
+    if (!targetGroup) throw new Error('No se encontró el grupo del alumno en este plantel.');
+
+    const isTeacherManual = currentUser.role === 'teacher';
+    if (isTeacherManual) {
+      const teacherIsAssigned = targetGroup.schedule.some((period) =>
+        period.teacherId === currentUser.linkedEntityId || period.teacherId === currentUser.id
+      );
+      if (!teacherIsAssigned) throw new Error('Solo puedes pasar lista en grupos donde tienes una clase asignada.');
+      if (newStatus !== 'in_class') throw new Error('El docente solo puede confirmar presencia en clase; las demás correcciones corresponden a Dirección u Orientación.');
+    }
 
     const previousStatus = targetStudent.currentStatus;
+    const now = new Date().toISOString();
     const updatedStudent: Student = {
       ...targetStudent,
       currentStatus: newStatus,
-      validatedVia: 'director_correction',
-      validatedAt: simulatedTime,
-      lastUpdated: simulatedTime,
+      validatedVia: isTeacherManual ? 'teacher_manual' : 'director_correction',
+      validatedAt: now,
+      lastUpdated: now,
     };
 
-    if (!currentUser?.schoolId || !currentUser.id) {
-      throw new Error('No se puede corregir asistencia sin una sesión escolar válida.');
-    }
-
-    // Save the attendance change and its audit evidence in one Firestore batch.
-    // If either write is rejected, neither is presented as completed in the UI.
     const newAuditLog: AuditLogEntry = {
       id: `aud-${Date.now()}`,
       schoolId: currentUser.schoolId,
@@ -458,24 +476,24 @@ export default function App() {
       studentId: targetStudent.id,
       studentName: targetStudent.name,
       groupId: targetStudent.groupId,
-      subjectName: studentActiveClass?.subjectName || 'Sin materia asignada',
+      subjectName: isTeacherManual
+        ? (targetGroup.schedule.find((period) => period.teacherId === currentUser.linkedEntityId || period.teacherId === currentUser.id)?.subjectName || 'Clase asignada')
+        : (studentActiveClass?.subjectName || 'Sin materia asignada'),
       previousStatus,
       newStatus,
       modifiedBy: currentUser.name,
       modifiedByRole: currentUser.role,
       reason,
-      timestamp: simulatedTime,
+      timestamp: now,
     };
     await syncAttendanceCorrectionToCloud(updatedStudent, newAuditLog);
 
-    setStudents((prev) =>
-      prev.map((s) => (s.id === studentId ? updatedStudent : s))
-    );
+    setStudents((prev) => prev.map((student) => student.id === studentId ? updatedStudent : student));
     setAuditLogs((prev) => [newAuditLog, ...prev]);
 
     pushNotification(
       'attendance_corrected',
-      'Asistencia Corregida por Dirección',
+      isTeacherManual ? 'Asistencia confirmada por docente' : 'Asistencia corregida por personal escolar',
       `La asistencia de ${targetStudent.name} fue modificada de ${previousStatus} a ${newStatus}. Motivo: ${reason}`,
       'orientador',
       { groupId: targetStudent.groupId }
