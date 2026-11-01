@@ -642,6 +642,17 @@ export default function App() {
       setOrientadores((prev) => prev.map((entry) => entry.id === id ? record : entry));
     } else if (kind === 'teacher') {
       const item = teachers.find((entry) => entry.id === id); if (!item) return;
+      if (!active) {
+        const assignedGroups = groups.filter((group) =>
+          group.schoolId === currentUser.schoolId
+          && group.active !== false
+          && group.schedule.some((slot) => slot.teacherId === id)
+        );
+        if (assignedGroups.length > 0) {
+          const groupNames = assignedGroups.map((group) => group.name).join(', ');
+          throw new Error(`No se puede desactivar al docente porque tiene horarios activos asignados: ${groupNames}. Reasigna primero sus clases.`);
+        }
+      }
       const record = { ...item, active, schoolId: currentUser.schoolId }; await syncTeacherToCloud(record);
       setTeachers((prev) => prev.map((entry) => entry.id === id ? record : entry));
     } else {
