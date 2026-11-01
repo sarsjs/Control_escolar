@@ -18,6 +18,16 @@ import { Student, SchoolGroup, AuditLogEntry, AttendanceDispute, SystemNotificat
 
 export { testFirestoreConnection };
 
+/** Treat attendance as a daily state; yesterday's presence must not remain today's status. */
+function normalizeStudentForCurrentDay(student: Student): Student {
+  const today = new Date().toISOString().slice(0, 10);
+  const validatedDate = typeof student.validatedAt === 'string' ? student.validatedAt.slice(0, 10) : '';
+  if (student.currentStatus !== 'outside_school' && validatedDate !== today) {
+    return { ...student, currentStatus: 'outside_school', validatedVia: null, validatedAt: undefined };
+  }
+  return student;
+}
+
 /**
  * Save a real school group to Firestore.
  */
@@ -58,7 +68,7 @@ export function subscribeToStudentById(
   }
   return onSnapshot(
     doc(db, 'students', studentId),
-    (snapshot) => onUpdate(snapshot.exists() ? snapshot.data() as Student : null),
+    (snapshot) => onUpdate(snapshot.exists() ? normalizeStudentForCurrentDay(snapshot.data() as Student) : null),
     (error) => console.warn('Firestore own-student subscription error:', error)
   );
 }
@@ -238,7 +248,7 @@ export function subscribeToStudents(
       (snapshot) => {
         const list: Student[] = [];
         snapshot.forEach((d) => {
-          list.push(d.data() as Student);
+          list.push(normalizeStudentForCurrentDay(d.data() as Student));
         });
         // An empty collection is meaningful: clear stale or demo attendance rows.
         onUpdate(list);
