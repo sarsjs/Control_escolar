@@ -349,6 +349,29 @@ export async function resolveDisputeToCloud(dispute: AttendanceDispute, student?
 }
 
 
+/** Subscribe to persisted attendance audit history within the authenticated school. */
+export function subscribeToAuditLogs(
+  schoolId: string | undefined,
+  isSuperAdmin: boolean,
+  onUpdate: (items: AuditLogEntry[]) => void
+) {
+  if (!isSuperAdmin && !schoolId) {
+    onUpdate([]);
+    return () => {};
+  }
+  const logsRef = collection(db, 'audit_logs');
+  const scopedQuery = isSuperAdmin ? logsRef : query(logsRef, where('schoolId', '==', schoolId));
+  return onSnapshot(
+    scopedQuery,
+    (snapshot) => {
+      const items = snapshot.docs.map((item) => item.data() as AuditLogEntry);
+      items.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      onUpdate(items);
+    },
+    (error) => console.warn('Firestore audit log subscription error:', error)
+  );
+}
+
 /** School-scoped real-time staff rosters. Never query all schools for a director. */
 export function subscribeToOrientadores(
   schoolId: string | undefined,
