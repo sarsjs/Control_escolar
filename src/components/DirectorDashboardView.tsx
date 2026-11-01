@@ -105,11 +105,12 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
   const [correctionError, setCorrectionError] = useState<string>('');
   const [correctionBusy, setCorrectionBusy] = useState(false);
 
-  const totalStudents = students.length;
-  const inClassCount = students.filter((s) => s.currentStatus === 'in_class').length;
-  const onCampusOutsideCount = students.filter((s) => s.currentStatus === 'on_campus_not_in_class').length;
-  const enRouteCount = students.filter((s) => s.currentStatus === 'en_route_delayed').length;
-  const absentCount = students.filter((s) => s.currentStatus === 'outside_school' || s.currentStatus === 'absent').length;
+  const activeStudents = students.filter((student) => student.active !== false);
+  const totalStudents = activeStudents.length;
+  const inClassCount = activeStudents.filter((student) => student.currentStatus === 'in_class').length;
+  const onCampusOutsideCount = activeStudents.filter((student) => student.currentStatus === 'on_campus_not_in_class').length;
+  const enRouteCount = activeStudents.filter((student) => student.currentStatus === 'en_route_delayed').length;
+  const absentCount = activeStudents.filter((student) => student.currentStatus === 'outside_school' || student.currentStatus === 'absent').length;
 
   const handleReassign = async (groupId: string, orientadorId: string) => {
     setGroupActionError('');
