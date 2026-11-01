@@ -603,7 +603,7 @@ export default function App() {
     const name = input.name.trim();
     const email = input.email.trim().toLowerCase();
     if (!name) throw new Error('El nombre del orientador es obligatorio.');
-    if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error('El correo electrónico del orientador no es válido.');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('El correo electrónico del orientador no es válido.');
     const duplicateEmail = email && [...orientadores, ...teachers].some((item) =>
       item.id !== id && item.schoolId === currentUser.schoolId && item.email?.trim().toLowerCase() === email
     );
@@ -620,7 +620,7 @@ export default function App() {
     const name = input.name.trim();
     const email = input.email.trim().toLowerCase();
     if (!name) throw new Error('El nombre del docente es obligatorio.');
-    if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error('El correo electrónico del docente no es válido.');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('El correo electrónico del docente no es válido.');
     const duplicateEmail = email && [...orientadores, ...teachers].some((item) =>
       item.id !== id && item.schoolId === currentUser.schoolId && item.email?.trim().toLowerCase() === email
     );
