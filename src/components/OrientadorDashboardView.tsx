@@ -732,7 +732,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-slate-400">PIN: {item.currentPin}</span>
+                    
                     <button type="button" onClick={() => handleEditSchedulePeriod(item)} className="rounded-lg px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">Editar</button>
                     <button
                       type="button"
