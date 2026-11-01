@@ -21,7 +21,7 @@ interface TeacherDashboardViewProps {
   students: Student[];
   onSelectGroup: (group: SchoolGroup) => void;
   onSendStudentAlert: (studentId: string, studentName: string) => void;
-  onManualValidateStudent: (studentId: string) => void;
+  onManualValidateStudent: (studentId: string) => Promise<void>;
 }
 
 export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
@@ -35,6 +35,8 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
 }) => {
   const [projectorMode, setProjectorMode] = useState<boolean>(false);
   const [activeTabFilter, setActiveTabFilter] = useState<'all' | 'in_class' | 'on_campus' | 'delayed' | 'absent'>('all');
+  const [validatingStudentId, setValidatingStudentId] = useState<string>('');
+  const [validationFeedback, setValidationFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Find active subject for this teacher in this group
   const activeClass =
@@ -49,6 +51,19 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
   const onCampusOutsideStudents = groupStudents.filter((s) => s.currentStatus === 'on_campus_not_in_class');
   const delayedStudents = groupStudents.filter((s) => s.currentStatus === 'en_route_delayed');
   const outsideStudents = groupStudents.filter((s) => s.currentStatus === 'outside_school' || s.currentStatus === 'absent');
+
+  const handleManualValidation = async (studentId: string, studentName: string) => {
+    setValidatingStudentId(studentId);
+    setValidationFeedback(null);
+    try {
+      await onManualValidateStudent(studentId);
+      setValidationFeedback({ type: 'success', message: 'Asistencia de ' + studentName + ' guardada en Firestore.' });
+    } catch (error) {
+      setValidationFeedback({ type: 'error', message: error instanceof Error ? error.message : 'No se pudo guardar la asistencia.' });
+    } finally {
+      setValidatingStudentId('');
+    }
+  };
 
   const filteredStudents = groupStudents.filter((s) => {
     if (activeTabFilter === 'in_class') return s.currentStatus === 'in_class';
@@ -159,6 +174,13 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
             La validación por PIN y Bluetooth aún no está habilitada; no se registrarán asistencias simuladas.
           </p>
         </div>
+      )}
+
+      {validationFeedback && (
+        <p role={validationFeedback.type === 'error' ? 'alert' : 'status'}
+          className={`rounded-xl border px-4 py-3 text-sm ${validationFeedback.type === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+          {validationFeedback.message}
+        </p>
       )}
 
       {/* Summary KPI Strip */}
@@ -465,10 +487,11 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
                       ) : (
                         <button
                           type="button"
-                          onClick={() => onManualValidateStudent(st.id)}
-                          className="px-2.5 py-1 rounded-lg border border-slate-300 hover:bg-slate-100 font-medium text-[11px] text-slate-700 transition-colors"
+                          onClick={() => void handleManualValidation(st.id, st.name)}
+                          disabled={validatingStudentId === st.id}
+                          className="px-2.5 py-1 rounded-lg border border-slate-300 hover:bg-slate-100 font-medium text-[11px] text-slate-700 transition-colors disabled:opacity-50"
                         >
-                          Pase Manual
+                          {validatingStudentId === st.id ? 'Guardando…' : 'Pase Manual'}
                         </button>
                       )}
                     </td>
