@@ -166,7 +166,7 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
           <span className="text-[11px] text-slate-500 mt-1 block">Registros confirmados</span>
         </div>
 
-        {/* KPI 2: En Campus Fuera de Aula */}
+        {/* KPI 2: Marcados en Plantel sin Aula */}
         <div
           onClick={() => setActiveTabFilter('on_campus')}
           className={`p-4 rounded-2xl border cursor-pointer transition-all ${
