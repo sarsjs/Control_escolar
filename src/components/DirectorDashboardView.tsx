@@ -53,6 +53,7 @@ interface DirectorDashboardViewProps {
   onImportStudentsCsv: (groupId: string, rows: { name: string; matricula: string; email?: string }[]) => Promise<void>;
   onProvisionAccount: (kind: 'orientador' | 'teacher' | 'student', id: string) => Promise<void>;
   onUpdateDirectorGroup: (input: { id: string; name: string; semester: number; turn: 'Matutino' | 'Vespertino'; orientadorId: string; active: boolean }) => Promise<void>;
+  staffSubscriptionError?: string;
 }
 
 export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
@@ -76,6 +77,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
   onImportStudentsCsv,
   onProvisionAccount,
   onUpdateDirectorGroup,
+  staffSubscriptionError,
 }) => {
   const [activeTab, setActiveTab] = useState<'matrix' | 'audit' | 'attendance' | 'groups' | 'disputes' | 'people'>('people');
   const [successMessage, setSuccessMessage] = useState<string>('');
@@ -300,6 +302,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
             teachers={teachers}
             students={students}
             groups={groups}
+            syncError={staffSubscriptionError}
             onSaveOrientador={onSaveOrientador}
             onSaveTeacher={onSaveTeacher}
             onSaveStudent={onSaveStudent}

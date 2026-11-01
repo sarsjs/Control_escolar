@@ -126,6 +126,39 @@
         "groupsCount": { "type": "number" }
       },
       "required": ["id", "name", "cct", "latitude", "longitude", "geofenceRadiusMeters", "directorName", "directorEmail", "status"]
+    },
+    "Orientador": {
+      "title": "Orientador",
+      "description": "Ficha escolar de personal de orientación educativa asignado a un plantel.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "schoolId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 160 },
+        "email": { "type": "string", "maxLength": 254 },
+        "avatar": { "type": "string", "maxLength": 512 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "cubicle": { "type": "string", "maxLength": 96 },
+        "assignedGroupIds": { "type": "array", "items": { "type": "string" } },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "schoolId", "name", "email", "phone", "cubicle"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Ficha escolar de personal docente asignado a un plantel.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "schoolId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 160 },
+        "email": { "type": "string", "maxLength": 254 },
+        "avatar": { "type": "string", "maxLength": 512 },
+        "specialty": { "type": "string", "maxLength": 128 },
+        "assignedGroupIds": { "type": "array", "items": { "type": "string" } },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "schoolId", "name", "email", "specialty"]
     }
   },
   "firestore": {
@@ -140,6 +173,14 @@
     "/groups/{groupId}": {
       "schema": "SchoolGroup",
       "description": "Colección de grupos académicos y asignación de orientador."
+    },
+    "/orientadores/{orientadorId}": {
+      "schema": "Orientador",
+      "description": "Plantilla escolar de orientadores del plantel escolar."
+    },
+    "/teachers/{teacherId}": {
+      "schema": "Teacher",
+      "description": "Plantilla escolar de docentes del plantel escolar."
     },
     "/disputes/{disputeId}": {
       "schema": "AttendanceDispute",

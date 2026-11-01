@@ -77,6 +77,7 @@ export default function App() {
   const [disputes, setDisputes] = useState<AttendanceDispute[]>([]);
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
   const [etaReports, setEtaReports] = useState<EtaReport[]>([]);
+  const [staffSubscriptionError, setStaffSubscriptionError] = useState<string>('');
 
   // Use the device's real local time for audit and notification timestamps.
   const [simulatedTime, setSimulatedTime] = useState<string>(() =>
@@ -238,11 +239,29 @@ export default function App() {
     } else {
       if (currentUser.role === 'director' || currentUser.role === 'orientador') {
         setTeachers([]);
-        unsubscribeTeachers = subscribeToTeachers(currentUser.schoolId, (items) => setTeachers(items));
+        unsubscribeTeachers = subscribeToTeachers(
+          currentUser.schoolId,
+          (items) => {
+            setTeachers(items);
+            setStaffSubscriptionError((prev) => prev.includes('docentes') ? '' : prev);
+          },
+          (err) => {
+            setStaffSubscriptionError(`Error al sincronizar docentes en tiempo real desde Firestore: ${err.message}`);
+          }
+        );
       }
       if (currentUser.role === 'director') {
         setOrientadores([]);
-        unsubscribeOrientadores = subscribeToOrientadores(currentUser.schoolId, (items) => setOrientadores(items));
+        unsubscribeOrientadores = subscribeToOrientadores(
+          currentUser.schoolId,
+          (items) => {
+            setOrientadores(items);
+            setStaffSubscriptionError((prev) => prev.includes('orientadores') ? '' : prev);
+          },
+          (err) => {
+            setStaffSubscriptionError(`Error al sincronizar orientadores en tiempo real desde Firestore: ${err.message}. Verifica que las reglas de seguridad estén desplegadas.`);
+          }
+        );
       }
       unsubscribeStudents = subscribeToStudents(currentUser.schoolId, isSuperAdmin, (cloudStudents) => {
         setStudents(cloudStudents);
@@ -1184,6 +1203,7 @@ export default function App() {
             onImportStudentsCsv={handleImportStudentsCsv}
             onProvisionAccount={handleProvisionAccount}
             onUpdateDirectorGroup={handleUpdateDirectorGroup}
+            staffSubscriptionError={staffSubscriptionError}
           />
         )}
 

@@ -8,6 +8,7 @@ interface Props {
   teachers: Teacher[];
   students: Student[];
   groups: SchoolGroup[];
+  syncError?: string;
   onSaveOrientador: (input: { id?: string; name: string; email: string; phone: string; cubicle: string }) => Promise<void>;
   onSaveTeacher: (input: { id?: string; name: string; email: string; specialty: string }) => Promise<void>;
   onSaveStudent: (input: { id?: string; name: string; matricula: string; email: string; groupId: string }) => Promise<void>;
@@ -20,7 +21,7 @@ const fieldClass = 'w-full rounded-xl border border-slate-200 px-3 py-2.5 text-s
 const buttonClass = 'rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50';
 const secondaryClass = 'rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50';
 
-export const DirectorPeopleManagement: React.FC<Props> = ({ orientadores, teachers, students, groups, onSaveOrientador, onSaveTeacher, onSaveStudent, onSetRosterActive, onImportStudentsCsv, onProvisionAccount }) => {
+export const DirectorPeopleManagement: React.FC<Props> = ({ orientadores, teachers, students, groups, syncError, onSaveOrientador, onSaveTeacher, onSaveStudent, onSetRosterActive, onImportStudentsCsv, onProvisionAccount }) => {
   const [tab, setTab] = useState<PersonTab>('orientadores');
   const [editingId, setEditingId] = useState<string>();
   const [name, setName] = useState('');
@@ -90,6 +91,12 @@ export const DirectorPeopleManagement: React.FC<Props> = ({ orientadores, teache
         {tabButton('alumnos', 'Alumnos', students.length)}
       </div>
       {tab === 'alumnos' && <DirectorStudentCsvImport groups={activeGroups.filter((group) => group.active !== false)} existingStudents={students} onImport={onImportStudentsCsv} />}
+      {syncError && (
+        <div role="alert" className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <p className="font-bold">Aviso de sincronización en la base de datos Firestore</p>
+          <p className="mt-1 text-xs text-rose-700">{syncError}</p>
+        </div>
+      )}
       {message && <p role="status" className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>}
       {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       <div className="grid gap-5 lg:grid-cols-[minmax(260px,0.85fr)_minmax(0,1.4fr)]">

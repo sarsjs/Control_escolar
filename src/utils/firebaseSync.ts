@@ -350,25 +350,73 @@ export async function resolveDisputeToCloud(dispute: AttendanceDispute, student?
 
 
 /** School-scoped real-time staff rosters. Never query all schools for a director. */
-export function subscribeToOrientadores(schoolId: string | undefined, onUpdate: (items: Orientador[]) => void) {
-  if (!schoolId) { onUpdate([]); return () => {}; }
-  return onSnapshot(query(collection(db, 'orientadores'), where('schoolId', '==', schoolId)),
+export function subscribeToOrientadores(
+  schoolId: string | undefined,
+  onUpdate: (items: Orientador[]) => void,
+  onError?: (error: Error) => void
+) {
+  if (!schoolId) {
+    onUpdate([]);
+    return () => {};
+  }
+  return onSnapshot(
+    query(collection(db, 'orientadores'), where('schoolId', '==', schoolId)),
     (snapshot) => onUpdate(snapshot.docs.map((item) => item.data() as Orientador)),
-    (error) => console.warn('Firestore orientadores subscription error:', error));
+    (error) => {
+      console.warn('Firestore orientadores subscription error:', error);
+      onError?.(error instanceof Error ? error : new Error(String(error)));
+    }
+  );
 }
 
-export function subscribeToTeachers(schoolId: string | undefined, onUpdate: (items: Teacher[]) => void) {
-  if (!schoolId) { onUpdate([]); return () => {}; }
-  return onSnapshot(query(collection(db, 'teachers'), where('schoolId', '==', schoolId)),
+export function subscribeToTeachers(
+  schoolId: string | undefined,
+  onUpdate: (items: Teacher[]) => void,
+  onError?: (error: Error) => void
+) {
+  if (!schoolId) {
+    onUpdate([]);
+    return () => {};
+  }
+  return onSnapshot(
+    query(collection(db, 'teachers'), where('schoolId', '==', schoolId)),
     (snapshot) => onUpdate(snapshot.docs.map((item) => item.data() as Teacher)),
-    (error) => console.warn('Firestore teachers subscription error:', error));
+    (error) => {
+      console.warn('Firestore teachers subscription error:', error);
+      onError?.(error instanceof Error ? error : new Error(String(error)));
+    }
+  );
 }
 
 /** Persist roster records only. Authentication credentials must be provisioned server-side. */
 export async function syncOrientadorToCloud(item: Orientador & { schoolId: string }) {
-  await setDoc(doc(db, 'orientadores', item.id), item, { merge: true });
+  if (!item.schoolId) {
+    throw new Error('El registro del orientador debe tener un plantel escolar (schoolId) asignado.');
+  }
+  try {
+    await setDoc(doc(db, 'orientadores', item.id), item, { merge: true });
+  } catch (error) {
+    console.error('Error al sincronizar orientador en Firestore:', error);
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes('permission-denied') || msg.includes('PERMISSION_DENIED')) {
+      throw new Error('Permisos insuficientes en Firestore: verifica que las reglas permitan a la Dirección guardar en la colección "orientadores" de este plantel.');
+    }
+    throw new Error(`Error al guardar en Firestore (colección orientadores): ${msg}`);
+  }
 }
 
 export async function syncTeacherToCloud(item: Teacher & { schoolId: string }) {
-  await setDoc(doc(db, 'teachers', item.id), item, { merge: true });
+  if (!item.schoolId) {
+    throw new Error('El registro del docente debe tener un plantel escolar (schoolId) asignado.');
+  }
+  try {
+    await setDoc(doc(db, 'teachers', item.id), item, { merge: true });
+  } catch (error) {
+    console.error('Error al sincronizar docente en Firestore:', error);
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes('permission-denied') || msg.includes('PERMISSION_DENIED')) {
+      throw new Error('Permisos insuficientes en Firestore: verifica que las reglas permitan a la Dirección guardar en la colección "teachers" de este plantel.');
+    }
+    throw new Error(`Error al guardar en Firestore (colección teachers): ${msg}`);
+  }
 }
