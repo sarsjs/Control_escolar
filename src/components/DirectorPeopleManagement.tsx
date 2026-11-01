@@ -112,15 +112,21 @@ export const DirectorPeopleManagement: React.FC<Props> = ({ orientadores, teache
             const item = raw as Orientador & Teacher & Student;
             const active = item.active !== false;
             const group = groups.find((g) => g.id === item.groupId);
+            const teacherGroups = tab === 'docentes'
+              ? groups.filter((g) => g.active !== false && g.schedule.some((slot) => slot.teacherId === item.id))
+              : [];
+            const teacherHasActiveSchedule = active && teacherGroups.length > 0;
             return <article key={item.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-slate-900">{item.name}</p><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{active ? 'ACTIVO' : 'INACTIVO'}</span></div>
                 <p className="mt-1 break-words text-xs text-slate-500">{tab === 'alumnos' ? `Matrícula: ${item.matricula || '—'} · ${item.email || 'Sin correo'} · Grupo: ${group?.name || 'Sin grupo'}` : [item.email, tab === 'orientadores' ? item.phone : (item as Teacher).specialty].filter(Boolean).join(' · ') || 'Sin datos adicionales'}</p>
+                {tab === 'docentes' && teacherGroups.length > 0 && <p className="mt-2 text-xs text-slate-600"><span className="font-semibold">Horarios asignados:</span> {teacherGroups.map((g) => g.name).join(', ')}</p>}
+                {teacherHasActiveSchedule && <p className="mt-1 text-xs font-medium text-amber-700">Reasigna sus clases antes de desactivar este docente.</p>}
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 <button type="button" className={secondaryClass} onClick={() => startEdit(tab, item)}>Editar</button>
                 {active && item.email && <button type="button" className={secondaryClass} disabled={provisioningId === item.id} onClick={() => void provision(tab === 'orientadores' ? 'orientador' : tab === 'docentes' ? 'teacher' : 'student', item.id)}>{provisioningId === item.id ? 'Creando acceso…' : 'Crear / reenviar acceso'}</button>}
-                <button type="button" className={secondaryClass} onClick={() => void toggleActive(tab === 'orientadores' ? 'orientador' : tab === 'docentes' ? 'teacher' : 'student', item.id, !active)}>{active ? 'Desactivar' : 'Reactivar'}</button>
+                <button type="button" className={secondaryClass} disabled={teacherHasActiveSchedule} title={teacherHasActiveSchedule ? 'Reasigna primero las clases de este docente.' : undefined} onClick={() => void toggleActive(tab === 'orientadores' ? 'orientador' : tab === 'docentes' ? 'teacher' : 'student', item.id, !active)}>{active ? 'Desactivar' : 'Reactivar'}</button>
               </div>
             </article>;
           })}
