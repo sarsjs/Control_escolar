@@ -97,6 +97,7 @@ export interface Student {
   schoolId?: string;
   name: string;
   matricula: string;
+  email?: string; // Optional account email; required only when provisioning student login
   groupId: string;
   avatar: string;
   currentStatus: StudentPresenceStatus;
