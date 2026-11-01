@@ -61,6 +61,10 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   const myGroups = allGroups.filter(
     (g) => g.orientadorId === orientador.id || g.temporarySubstituteOrientadorId === orientador.id
   );
+  // Never offer teachers from another school or inactive teacher records.
+  const activeTeachers = allTeachers.filter(
+    (teacher) => teacher.schoolId === orientador.schoolId && teacher.active !== false
+  );
   const [selectedGroupId, setSelectedGroupId] = useState<string>(
     myGroups[0]?.id || allGroups[0]?.id || ''
   );
@@ -77,7 +81,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   const [startTime, setStartTime] = useState<string>('');
   const [endTime, setEndTime] = useState<string>('');
   const [toleranceMinutes, setToleranceMinutes] = useState<number>(10);
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(allTeachers[0]?.id || '');
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(activeTeachers[0]?.id || '');
   const [classroom, setClassroom] = useState<string>('');
 
   // Add student
@@ -119,8 +123,13 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
     e.preventDefault();
     if (!currentGroup || !subjectName.trim()) return;
 
-    const teacher = allTeachers.find((t) => t.id === selectedTeacherId && t.active !== false) || allTeachers.find((t) => t.active !== false);
-    if (!teacher) { window.alert('Primero registra o activa un docente para asignarlo a la materia.'); return; }
+    const teacher = activeTeachers.find((t) => t.id === selectedTeacherId);
+    if (!teacher) {
+      window.alert(activeTeachers.length
+        ? 'Selecciona un docente activo de este plantel.'
+        : 'No hay docentes activos registrados en este plantel. Solicita a Dirección que registre o active uno.');
+      return;
+    }
     if (endTime <= startTime) { window.alert('La hora de fin debe ser posterior a la hora de inicio.'); return; }
     const previous = editingPeriodId ? currentGroup.schedule.find((item) => item.id === editingPeriodId) : undefined;
     const newPeriod: GroupScheduleItem = {
@@ -539,15 +548,19 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">Docente Asignado</label>
                     <select
+                      required
                       value={selectedTeacherId}
                       onChange={(e) => setSelectedTeacherId(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white"
+                      disabled={activeTeachers.length === 0}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white disabled:bg-slate-100"
                     >
-                      {allTeachers.filter((t) => t.active !== false).map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} ({t.specialty})
-                        </option>
-                      ))}
+                      {activeTeachers.length === 0
+                        ? <option value="">Sin docentes activos disponibles</option>
+                        : activeTeachers.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.specialty})
+                          </option>
+                        ))}
                     </select>
                   </div>
 
@@ -605,7 +618,8 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs"
+                      disabled={activeTeachers.length === 0}
+                      className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {editingPeriodId ? 'Guardar cambios' : 'Guardar en el Horario'}
                     </button>
