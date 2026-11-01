@@ -111,7 +111,10 @@ service cloud.firestore {
         || (resource.data.schoolId is string && canAccessSchool(resource.data.schoolId));
       allow create: if isSuperAdmin()
         || (request.resource.data.schoolId is string
-          && canManageStudents(request.resource.data.schoolId));
+          && profile().role == 'director'
+          && canAccessSchool(request.resource.data.schoolId))
+        || (request.resource.data.schoolId is string
+          && canManageAssignedStudent(request.resource.data.schoolId, request.resource.data.groupId));
       // Students can read their own enrollment but cannot update attendance,
       // location, ETA, or validation fields directly from the client.
       allow update: if isSuperAdmin()
