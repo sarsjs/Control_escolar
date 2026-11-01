@@ -43,7 +43,7 @@ function parseCsv(text: string): { rows: { name: string; matricula: string; emai
     if (seen.has(key)) { errors.push('Fila ' + (index + 2) + ': matrícula repetida en el archivo (' + matricula + ').'); return; }
     seen.add(key);
     const email = emailIndex >= 0 ? (cells[emailIndex] || '').trim().toLowerCase() : '';
-    if (email && !/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(email)) { errors.push('Fila ' + (index + 2) + ': correo electrónico no válido.'); return; }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errors.push('Fila ' + (index + 2) + ': correo electrónico no válido.'); return; }
     rows.push({ name, matricula, ...(email ? { email } : {}) });
   });
   if (rows.length > 450) errors.push('El archivo contiene más de 450 alumnos. Divide la lista en archivos más pequeños.');
