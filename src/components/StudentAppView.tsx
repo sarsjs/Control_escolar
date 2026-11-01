@@ -350,7 +350,7 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
               className="w-full mt-2 inline-flex items-center justify-center gap-2 py-3.5 px-4 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] rounded-xl shadow-md transition-all"
             >
               <Radio className="w-4 h-4" />
-              <span>Confirmar Presencia en {activeClass?.classroom} (BLE Automático)</span>
+              <span>Consultar validación de asistencia en {activeClass?.classroom}</span>
             </button>
           </div>
         </div>
@@ -369,7 +369,7 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
                   Presencia en Clase Confirmada
                 </span>
                 <span className="text-[11px] font-mono text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                  Validado por {student.validatedVia?.toUpperCase() || 'BLE_AUTO'}
+                  Método: {student.validatedVia?.toUpperCase() || 'Sin método registrado'}
                 </span>
               </div>
               <h3 className="text-lg font-bold text-slate-900 mt-0.5">
