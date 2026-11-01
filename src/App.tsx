@@ -638,6 +638,17 @@ export default function App() {
     if (currentUser?.role !== 'director' || !currentUser.schoolId) throw new Error('Sesión de dirección o plantel no válido.');
     if (kind === 'orientador') {
       const item = orientadores.find((entry) => entry.id === id); if (!item) return;
+      if (!active) {
+        const assignedGroups = groups.filter((group) =>
+          group.schoolId === currentUser.schoolId
+          && group.active !== false
+          && (group.orientadorId === id || group.temporarySubstituteOrientadorId === id)
+        );
+        if (assignedGroups.length > 0) {
+          const groupNames = assignedGroups.map((group) => group.name).join(', ');
+          throw new Error(`No se puede desactivar al orientador porque tiene grupos activos asignados: ${groupNames}. Reasigna primero esos grupos.`);
+        }
+      }
       const record = { ...item, active, schoolId: currentUser.schoolId }; await syncOrientadorToCloud(record);
       setOrientadores((prev) => prev.map((entry) => entry.id === id ? record : entry));
     } else if (kind === 'teacher') {
