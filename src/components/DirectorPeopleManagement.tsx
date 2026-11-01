@@ -10,9 +10,9 @@ interface Props {
   groups: SchoolGroup[];
   onSaveOrientador: (input: { id?: string; name: string; email: string; phone: string; cubicle: string }) => Promise<void>;
   onSaveTeacher: (input: { id?: string; name: string; email: string; specialty: string }) => Promise<void>;
-  onSaveStudent: (input: { id?: string; name: string; matricula: string; groupId: string }) => Promise<void>;
+  onSaveStudent: (input: { id?: string; name: string; matricula: string; email: string; groupId: string }) => Promise<void>;
   onSetRosterActive: (kind: 'orientador' | 'teacher' | 'student', id: string, active: boolean) => Promise<void>;
-  onImportStudentsCsv: (groupId: string, rows: { name: string; matricula: string }[]) => Promise<void>;
+  onImportStudentsCsv: (groupId: string, rows: { name: string; matricula: string; email?: string }[]) => Promise<void>;
   onProvisionAccount: (kind: 'orientador' | 'teacher' | 'student', id: string) => Promise<void>;
 }
 
@@ -51,7 +51,7 @@ export const DirectorPeopleManagement: React.FC<Props> = ({ orientadores, teache
       else {
         if (!matricula.trim()) throw new Error('La matrícula es obligatoria.');
         if (!groupId) throw new Error('Primero crea un grupo para inscribir al alumno.');
-        await onSaveStudent({ id: editingId, name, matricula, groupId });
+        await onSaveStudent({ id: editingId, name, matricula, email, groupId });
       }
       setMessage(editingId ? 'Cambios guardados en la escuela.' : 'Registro guardado en la escuela.');
       reset();
@@ -102,7 +102,7 @@ export const DirectorPeopleManagement: React.FC<Props> = ({ orientadores, teache
           {tab !== 'alumnos' && <label className="block text-xs font-semibold text-slate-600">Correo electrónico<input className={fieldClass + ' mt-1'} type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={160} /></label>}
           {tab === 'orientadores' && <><label className="block text-xs font-semibold text-slate-600">Teléfono<input className={fieldClass + ' mt-1'} value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={30} /></label><label className="block text-xs font-semibold text-slate-600">Cubículo / oficina<input className={fieldClass + ' mt-1'} value={detail} onChange={(e) => setDetail(e.target.value)} maxLength={80} /></label></>}
           {tab === 'docentes' && <label className="block text-xs font-semibold text-slate-600">Especialidad o materia<input className={fieldClass + ' mt-1'} value={detail} onChange={(e) => setDetail(e.target.value)} maxLength={100} /></label>}
-          {tab === 'alumnos' && <><label className="block text-xs font-semibold text-slate-600">Matrícula<input className={fieldClass + ' mt-1'} value={matricula} onChange={(e) => setMatricula(e.target.value)} required maxLength={60} /></label><label className="block text-xs font-semibold text-slate-600">Grupo<select className={fieldClass + ' mt-1'} value={groupId} onChange={(e) => setGroupId(e.target.value)} required><option value="">Seleccionar grupo</option>{activeGroups.map((g) => <option key={g.id} value={g.id}>{g.name} · {g.semester}° · {g.turn}</option>)}</select></label></>}
+          {tab === 'alumnos' && <><label className="block text-xs font-semibold text-slate-600">Matrícula<input className={fieldClass + ' mt-1'} value={matricula} onChange={(e) => setMatricula(e.target.value)} required maxLength={60} /></label><label className="block text-xs font-semibold text-slate-600">Correo electrónico (opcional)<input className={fieldClass + ' mt-1'} type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={160} placeholder="alumno@correo.com" /></label><label className="block text-xs font-semibold text-slate-600">Grupo<select className={fieldClass + ' mt-1'} value={groupId} onChange={(e) => setGroupId(e.target.value)} required><option value="">Seleccionar grupo</option>{activeGroups.map((g) => <option key={g.id} value={g.id}>{g.name} · {g.semester}° · {g.turn}</option>)}</select></label></>}
           <button type="submit" className={buttonClass + ' w-full'} disabled={busy}>{busy ? 'Guardando…' : editingId ? 'Guardar cambios' : 'Guardar registro'}</button>
           <p className="text-xs leading-relaxed text-slate-500">El registro escolar es independiente de la cuenta. Para docentes y orientadores activos con correo, usa “Crear / reenviar acceso”; la contraseña se configura por correo.</p>
         </form>
@@ -115,11 +115,11 @@ export const DirectorPeopleManagement: React.FC<Props> = ({ orientadores, teache
             return <article key={item.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-slate-900">{item.name}</p><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{active ? 'ACTIVO' : 'INACTIVO'}</span></div>
-                <p className="mt-1 break-words text-xs text-slate-500">{tab === 'alumnos' ? `Matrícula: ${item.matricula || '—'} · Grupo: ${group?.name || 'Sin grupo'}` : [item.email, tab === 'orientadores' ? item.phone : (item as Teacher).specialty].filter(Boolean).join(' · ') || 'Sin datos adicionales'}</p>
+                <p className="mt-1 break-words text-xs text-slate-500">{tab === 'alumnos' ? `Matrícula: ${item.matricula || '—'} · ${item.email || 'Sin correo'} · Grupo: ${group?.name || 'Sin grupo'}` : [item.email, tab === 'orientadores' ? item.phone : (item as Teacher).specialty].filter(Boolean).join(' · ') || 'Sin datos adicionales'}</p>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 <button type="button" className={secondaryClass} onClick={() => startEdit(tab, item)}>Editar</button>
-                {tab !== 'alumnos' && active && item.email && <button type="button" className={secondaryClass} disabled={provisioningId === item.id} onClick={() => void provision(tab === 'orientadores' ? 'orientador' : 'teacher', item.id)}>{provisioningId === item.id ? 'Creando acceso…' : 'Crear / reenviar acceso'}</button>}
+                {active && item.email && <button type="button" className={secondaryClass} disabled={provisioningId === item.id} onClick={() => void provision(tab === 'orientadores' ? 'orientador' : tab === 'docentes' ? 'teacher' : 'student', item.id)}>{provisioningId === item.id ? 'Creando acceso…' : 'Crear / reenviar acceso'}</button>}
                 <button type="button" className={secondaryClass} onClick={() => void toggleActive(tab === 'orientadores' ? 'orientador' : tab === 'docentes' ? 'teacher' : 'student', item.id, !active)}>{active ? 'Desactivar' : 'Reactivar'}</button>
               </div>
             </article>;
