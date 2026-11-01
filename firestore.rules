@@ -60,6 +60,16 @@ service cloud.firestore {
           && profile().role in ['director', 'orientador']);
     }
 
+    function canManageAssignedStudent(schoolId, groupId) {
+      return canAccessSchool(schoolId)
+        && profile().role == 'orientador'
+        && groupId is string
+        && exists(/databases/$(database)/documents/groups/$(groupId))
+        && get(/databases/$(database)/documents/groups/$(groupId)).data.schoolId == schoolId
+        && (get(/databases/$(database)/documents/groups/$(groupId)).data.orientadorId == profile().linkedEntityId
+          || get(/databases/$(database)/documents/groups/$(groupId)).data.temporarySubstituteOrientadorId == profile().linkedEntityId);
+    }
+
     // Users may read their own profile. Only the superadmin may provision or
     // change other profiles; the initial owner bootstrap is narrowly constrained.
     match /users/{userId} {
@@ -107,7 +117,12 @@ service cloud.firestore {
       allow update: if isSuperAdmin()
         || (resource.data.schoolId is string
           && request.resource.data.schoolId == resource.data.schoolId
-          && canManageStudents(resource.data.schoolId));
+          && profile().role == 'director'
+          && canAccessSchool(resource.data.schoolId))
+        || (resource.data.schoolId is string
+          && request.resource.data.schoolId == resource.data.schoolId
+          && request.resource.data.groupId == resource.data.groupId
+          && canManageAssignedStudent(resource.data.schoolId, resource.data.groupId));
       allow delete: if isSuperAdmin()
         || (resource.data.schoolId is string
           && canAccessSchool(resource.data.schoolId)
