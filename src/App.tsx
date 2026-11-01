@@ -144,6 +144,7 @@ export default function App() {
             setOrientadores((prev) => {
               const current = {
                 id: linkedEntityId,
+                schoolId,
                 name: profileName,
                 email: firebaseUser.email || '',
                 avatar: profileAvatar,
