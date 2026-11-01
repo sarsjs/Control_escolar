@@ -44,7 +44,7 @@ interface DirectorDashboardViewProps {
     studentId: string,
     newStatus: StudentPresenceStatus,
     reason: string
-  ) => void;
+  ) => Promise<void>;
   onResolveDispute: (disputeId: string, approved: boolean, notes: string) => void;
   onSaveOrientador: (input: { id?: string; name: string; email: string; phone: string; cubicle: string }) => Promise<void>;
   onSaveTeacher: (input: { id?: string; name: string; email: string; specialty: string }) => Promise<void>;
@@ -101,6 +101,8 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
   const [correctingStudent, setCorrectingStudent] = useState<Student | null>(null);
   const [newCorrectedStatus, setNewCorrectedStatus] = useState<StudentPresenceStatus>('in_class');
   const [correctionReason, setCorrectionReason] = useState<string>('');
+  const [correctionError, setCorrectionError] = useState<string>('');
+  const [correctionBusy, setCorrectionBusy] = useState(false);
 
   const totalStudents = students.length;
   const inClassCount = students.filter((s) => s.currentStatus === 'in_class').length;
@@ -144,15 +146,22 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
     }
   };
 
-  const handleSaveCorrection = (e: React.FormEvent) => {
+  const handleSaveCorrection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!correctingStudent || !correctionReason.trim()) return;
-
-    onDirectorCorrectAttendance(correctingStudent.id, newCorrectedStatus, correctionReason);
-    setSuccessMessage(`Asistencia corregida para ${correctingStudent.name}. Registrado en auditoría.`);
-    setCorrectingStudent(null);
-    setCorrectionReason('');
-    setTimeout(() => setSuccessMessage(''), 4000);
+    setCorrectionError('');
+    setCorrectionBusy(true);
+    try {
+      await onDirectorCorrectAttendance(correctingStudent.id, newCorrectedStatus, correctionReason);
+      setSuccessMessage(`Asistencia corregida para ${correctingStudent.name}. Registrado en auditoría.`);
+      setCorrectingStudent(null);
+      setCorrectionReason('');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (error) {
+      setCorrectionError(error instanceof Error ? error.message : 'No se pudo guardar la corrección.');
+    } finally {
+      setCorrectionBusy(false);
+    }
   };
 
   return (
@@ -673,6 +682,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
             </p>
 
             <form onSubmit={handleSaveCorrection} className="space-y-4">
+              {correctionError && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{correctionError}</p>}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Nuevo Estado de Asistencia
@@ -713,10 +723,10 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={!correctionReason.trim()}
+                  disabled={!correctionReason.trim() || correctionBusy}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs disabled:opacity-50"
                 >
-                  Guardar Corrección en Auditoría
+                  {correctionBusy ? 'Guardando…' : 'Guardar Corrección en Auditoría'}
                 </button>
               </div>
             </form>
