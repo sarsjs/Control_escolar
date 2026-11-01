@@ -48,9 +48,9 @@ interface DirectorDashboardViewProps {
   onResolveDispute: (disputeId: string, approved: boolean, notes: string) => void;
   onSaveOrientador: (input: { id?: string; name: string; email: string; phone: string; cubicle: string }) => Promise<void>;
   onSaveTeacher: (input: { id?: string; name: string; email: string; specialty: string }) => Promise<void>;
-  onSaveStudent: (input: { id?: string; name: string; matricula: string; groupId: string }) => Promise<void>;
+  onSaveStudent: (input: { id?: string; name: string; matricula: string; email: string; groupId: string }) => Promise<void>;
   onSetRosterActive: (kind: 'orientador' | 'teacher' | 'student', id: string, active: boolean) => Promise<void>;
-  onImportStudentsCsv: (groupId: string, rows: { name: string; matricula: string }[]) => Promise<void>;
+  onImportStudentsCsv: (groupId: string, rows: { name: string; matricula: string; email?: string }[]) => Promise<void>;
   onProvisionAccount: (kind: 'orientador' | 'teacher' | 'student', id: string) => Promise<void>;
   onUpdateDirectorGroup: (input: { id: string; name: string; semester: number; turn: 'Matutino' | 'Vespertino'; orientadorId: string; active: boolean }) => Promise<void>;
 }
