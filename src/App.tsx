@@ -35,6 +35,7 @@ import { Cloud, CloudCheck } from 'lucide-react';
 import {
   testFirestoreConnection,
   syncStudentToCloud,
+  syncStudentAndGroupToCloud,
   syncStudentsAndGroupToCloud,
   syncAttendanceCorrectionToCloud,
   recordDisputeToCloud,
@@ -722,15 +723,28 @@ export default function App() {
       console.error('No se puede crear el grupo: falta vincular al orientador con un plantel real.');
       return;
     }
+    const normalizedName = name.trim().toLocaleLowerCase('es-MX');
+    const duplicate = groups.find((group) =>
+      group.schoolId === currentUser.schoolId
+      && group.active !== false
+      && group.semester === semester
+      && group.turn === turn
+      && group.name.trim().toLocaleLowerCase('es-MX') === normalizedName
+    );
+    if (duplicate) {
+      console.warn('No se creó el grupo: ya existe uno con el mismo semestre, nombre y turno.');
+      return;
+    }
     const newGroup: SchoolGroup = {
-      id: `grp-${Date.now()}`,
-      name,
+      id: `grp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: name.trim(),
       semester,
       turn,
       orientadorId: currentOrientadorEntity.id,
       schoolId: currentUser.schoolId,
       studentIds: [],
       schedule: [],
+      active: true,
     };
     try {
       await syncGroupToCloud(newGroup);
@@ -771,11 +785,25 @@ export default function App() {
       console.error('No se puede inscribir al alumno: el grupo no pertenece al plantel de la sesión.');
       return;
     }
-    const newStudentId = `stu-${Date.now()}`;
+    const cleanName = name.trim();
+    const cleanMatricula = matricula.trim();
+    if (!cleanName || !cleanMatricula) {
+      console.warn('La inscripción requiere nombre y matrícula.');
+      return;
+    }
+    const duplicateMatricula = students.some((student) =>
+      student.schoolId === targetGroup.schoolId
+      && student.matricula.trim().toLocaleLowerCase('es-MX') === cleanMatricula.toLocaleLowerCase('es-MX')
+    );
+    if (duplicateMatricula) {
+      console.warn('No se inscribió al alumno: la matrícula ya existe en este plantel.');
+      return;
+    }
+    const newStudentId = `stu-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const newStudent: Student = {
       id: newStudentId,
-      name,
-      matricula,
+      name: cleanName,
+      matricula: cleanMatricula,
       groupId,
       schoolId: targetGroup.schoolId,
       avatar: '',
@@ -783,12 +811,12 @@ export default function App() {
       currentZone: 'Sin ubicación registrada',
       distanceToCampusMeters: 0,
       lastUpdated: simulatedTime,
+      active: true,
     };
-    const updatedGroup = { ...targetGroup, studentIds: [...targetGroup.studentIds, newStudentId] };
+    const updatedGroup = { ...targetGroup, studentIds: [...new Set([...targetGroup.studentIds, newStudentId])] };
 
     try {
-      await syncStudentToCloud(newStudent);
-      await syncGroupToCloud(updatedGroup);
+      await syncStudentAndGroupToCloud(newStudent, updatedGroup);
       setStudents((prev) => [...prev, newStudent]);
       setGroups((prev) => prev.map((group) => group.id === groupId ? updatedGroup : group));
     } catch (error) {
