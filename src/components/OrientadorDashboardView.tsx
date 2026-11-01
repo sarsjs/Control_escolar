@@ -794,7 +794,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
 
             {/* Students List */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {groupStudents.filter((st) => st.active === false).map((st) => (
+              {groupStudents.filter((st) => st.active !== false).map((st) => (
                 <div
                   key={st.id}
                   className="bg-white p-3.5 rounded-xl border border-slate-200 flex items-center gap-3 shadow-2xs"
