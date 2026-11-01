@@ -554,7 +554,8 @@ export default function App() {
     if (kind === 'student') {
       const student = students.find((item) => item.id === id && item.schoolId === currentUser.schoolId);
       const email = student?.email?.trim() || '';
-      if (!student || !email) throw new Error('Este alumno no tiene correo registrado. Primero se debe definir su método de acceso.');
+      if (!student || student.active === false) throw new Error('El alumno debe estar activo para crear o reenviar su acceso.');
+      if (!email) throw new Error('Este alumno no tiene correo registrado. Primero captura su correo en la ficha escolar.');
       await provisionSchoolAccount({ role: 'student', schoolId: currentUser.schoolId, linkedEntityId: student.id, email, name: student.name });
       return;
     }
