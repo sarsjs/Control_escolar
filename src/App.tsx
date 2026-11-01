@@ -664,19 +664,20 @@ export default function App() {
 
   // 8. Director reassigns group
   const handleReassignGroupToOrientador = async (groupId: string, newOrientadorId: string) => {
-    if (currentUser?.role !== 'director' || !currentUser.schoolId) {
+    if (currentUser?.role !== 'director' || !schoolId) {
       throw new Error('Solo Dirección puede reasignar grupos.');
     }
-    const group = groups.find((item) => item.id === groupId && item.schoolId === currentUser.schoolId);
+    const schoolId = schoolId;
+    const group = groups.find((item) => item.id === groupId && item.schoolId === schoolId);
     if (!group) throw new Error('No se encontró el grupo de este plantel.');
-    const target = orientadores.find((item) => item.id === newOrientadorId && item.schoolId === currentUser.schoolId && item.active !== false);
+    const target = orientadores.find((item) => item.id === newOrientadorId && item.schoolId === schoolId && item.active !== false);
     if (!target) throw new Error('Selecciona un orientador activo de este plantel.');
     const updatedGroup = { ...group, orientadorId: newOrientadorId };
     const updatedOrientadores = orientadores.map((item) => {
       const ids = new Set(item.assignedGroupIds || []);
       ids.delete(groupId);
       if (item.id === newOrientadorId) ids.add(groupId);
-      return { ...item, assignedGroupIds: [...ids], schoolId: currentUser.schoolId };
+      return { ...item, assignedGroupIds: [...ids], schoolId: schoolId };
     });
     // Persist the authoritative group assignment before updating the visible state.
     await syncGroupToCloud(updatedGroup);
