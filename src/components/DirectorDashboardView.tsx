@@ -232,7 +232,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
             <span className="text-2xl font-black font-mono text-emerald-700">{inClassCount}</span>
             <span className="text-xs text-emerald-600">acreditados</span>
           </div>
-          <span className="text-[11px] text-emerald-700 mt-1 block">Validaron BLE / PIN</span>
+          <span className="text-[11px] text-emerald-700 mt-1 block">Pase manual o corrección autorizada</span>
         </div>
 
         <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200">
