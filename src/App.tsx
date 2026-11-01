@@ -664,10 +664,10 @@ export default function App() {
 
   // 8. Director reassigns group
   const handleReassignGroupToOrientador = async (groupId: string, newOrientadorId: string) => {
-    if (currentUser?.role !== 'director' || !schoolId) {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) {
       throw new Error('Solo Dirección puede reasignar grupos.');
     }
-    const schoolId = schoolId;
+    const schoolId: string = currentUser.schoolId;
     const group = groups.find((item) => item.id === groupId && item.schoolId === schoolId);
     if (!group) throw new Error('No se encontró el grupo de este plantel.');
     const target = orientadores.find((item) => item.id === newOrientadorId && item.schoolId === schoolId && item.active !== false);
