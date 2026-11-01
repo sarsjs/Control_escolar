@@ -33,7 +33,7 @@ interface OrientadorDashboardViewProps {
   allTeachers: Teacher[];
   disputes: AttendanceDispute[];
   simulatedTime: string;
-  onCreateGroup: (name: string, semester: number, turn: 'Matutino' | 'Vespertino') => void;
+  onCreateGroup: (name: string, semester: number, turn: 'Matutino' | 'Vespertino') => Promise<void>;
   onUpdateGroupSchedule: (groupId: string, newSchedule: GroupScheduleItem[]) => void;
   onAddStudentToGroup: (groupId: string, studentName: string, matricula: string) => Promise<void>;
   onUpdateStudent: (student: Student) => void;
@@ -73,6 +73,8 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   const [newGroupSemester, setNewGroupSemester] = useState('1');
   const [newGroupLetter, setNewGroupLetter] = useState('A');
   const [newGroupTurn, setNewGroupTurn] = useState<'Matutino' | 'Vespertino'>('Matutino');
+  const [groupCreateError, setGroupCreateError] = useState('');
+  const [groupCreateBusy, setGroupCreateBusy] = useState(false);
 
   // Modals
   const [isAddPeriodOpen, setIsAddPeriodOpen] = useState<boolean>(false);
@@ -100,13 +102,24 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
 
   const currentGroup = myGroups.find((g) => g.id === selectedGroupId) || myGroups[0];
 
-  const handleCreateGroup = (event: React.FormEvent) => {
+  const handleCreateGroup = async (event: React.FormEvent) => {
     event.preventDefault();
+    setGroupCreateError('');
     const semester = Number(newGroupSemester);
-    if (!Number.isInteger(semester) || semester < 1 || semester > 12 || !newGroupLetter.trim()) return;
-    onCreateGroup(`${semester}º Semestre · Grupo ${newGroupLetter.trim().toUpperCase()}`, semester, newGroupTurn);
-    setIsCreateGroupOpen(false);
-    setNewGroupLetter('A');
+    if (!Number.isInteger(semester) || semester < 1 || semester > 12 || !newGroupLetter.trim()) {
+      setGroupCreateError('Selecciona un semestre válido y escribe la letra del grupo.');
+      return;
+    }
+    setGroupCreateBusy(true);
+    try {
+      await onCreateGroup(`${semester}º Semestre · Grupo ${newGroupLetter.trim().toUpperCase()}`, semester, newGroupTurn);
+      setIsCreateGroupOpen(false);
+      setNewGroupLetter('A');
+    } catch (error) {
+      setGroupCreateError(error instanceof Error ? error.message : 'No se pudo guardar el grupo.');
+    } finally {
+      setGroupCreateBusy(false);
+    }
   };
   const groupStudents = allStudents.filter((s) => s.groupId === currentGroup?.id);
   const activeGroupStudents = groupStudents.filter((s) => s.active !== false);
@@ -276,6 +289,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
       {isCreateGroupOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
           <form onSubmit={handleCreateGroup} className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+            {groupCreateError && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{groupCreateError}</p>}
             <div>
               <h2 className="text-lg font-bold text-slate-900">Crear grupo escolar</h2>
               <p className="mt-1 text-sm text-slate-600">El grupo se guardará sin alumnos ni horario; esos datos se agregan después.</p>
@@ -295,7 +309,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
             </label>
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" onClick={() => setIsCreateGroupOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">Cancelar</button>
-              <button type="submit" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Crear grupo</button>
+              <button type="submit" disabled={groupCreateBusy} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{groupCreateBusy ? 'Guardando…' : 'Crear grupo'}</button>
             </div>
           </form>
         </div>
