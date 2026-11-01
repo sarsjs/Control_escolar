@@ -74,6 +74,13 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
 
   const totalStudents = schools.reduce((acc, curr) => acc + curr.enrolledStudentsCount, 0);
   const activeSchoolsCount = schools.filter((s) => s.status === 'active').length;
+  const geofencesConfiguredCount = schools.filter((school) =>
+    Number.isFinite(school.latitude) && Number.isFinite(school.longitude)
+    && school.latitude !== 0 && school.longitude !== 0 && school.geofenceRadiusMeters > 0
+  ).length;
+  const directorsConfiguredCount = schools.filter((school) =>
+    Boolean(school.directorName?.trim() && school.directorEmail?.trim())
+  ).length;
 
   const handleGetCurrentGps = () => {
     if (navigator.geolocation) {
@@ -228,10 +235,10 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <Radio className="w-4 h-4 text-blue-600" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-slate-900 font-mono">{schools.length}</span>
-            <span className="text-xs text-blue-600 font-semibold">100% calibradas</span>
+            <span className="text-3xl font-black text-slate-900 font-mono">{geofencesConfiguredCount}</span>
+            <span className="text-xs text-blue-600 font-semibold">configuradas</span>
           </div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Perímetros satelitales escolares</span>
+          <span className="text-[11px] text-slate-400 mt-1 block">Planteles con coordenadas y radio definidos</span>
         </div>
 
         {/* KPI 4 */}
@@ -241,10 +248,10 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             <UserCheck className="w-4 h-4 text-purple-600" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-slate-900 font-mono">{schools.length}</span>
-            <span className="text-xs text-purple-600 font-semibold">Cuentas creadas</span>
+            <span className="text-3xl font-black text-slate-900 font-mono">{directorsConfiguredCount}</span>
+            <span className="text-xs text-purple-600 font-semibold">datos registrados</span>
           </div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Autoridades autónomas</span>
+          <span className="text-[11px] text-slate-400 mt-1 block">El acceso se crea y envía desde cada plantel</span>
         </div>
       </div>
 
