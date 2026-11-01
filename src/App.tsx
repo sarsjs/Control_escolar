@@ -792,21 +792,40 @@ export default function App() {
   };
 
   const handleUpdateGroupSchedule = async (groupId: string, newSchedule: GroupScheduleItem[]) => {
-    const group = groups.find((item) => item.id === groupId);
-    if (!group) return;
-    const updatedGroup = { ...group, schedule: newSchedule };
-    try {
-      await syncGroupToCloud(updatedGroup);
-      setGroups((prev) => prev.map((g) => (g.id === groupId ? updatedGroup : g)));
-    } catch (error) {
-      console.error('No se pudo guardar el horario en Firestore:', error);
-      return;
+    if (!currentUser || !['director', 'orientador'].includes(currentUser.role) || !currentUser.schoolId) {
+      throw new Error('No tienes permisos para modificar horarios.');
     }
+    const group = groups.find((item) =>
+      item.id === groupId
+      && item.schoolId === currentUser.schoolId
+      && item.active !== false
+    );
+    if (!group) throw new Error('El grupo no existe, está inactivo o no pertenece a tu plantel.');
+    if (currentUser.role === 'orientador'
+      && group.orientadorId !== currentUser.linkedEntityId
+      && group.temporarySubstituteOrientadorId !== currentUser.linkedEntityId) {
+      throw new Error('Solo puedes modificar horarios de grupos que tienes asignados.');
+    }
+    const normalizedSchedule = newSchedule.map((period) => {
+      const teacher = teachers.find((item) =>
+        item.id === period.teacherId
+        && item.schoolId === currentUser.schoolId
+        && item.active !== false
+      );
+      if (!teacher) throw new Error('Cada materia debe tener un docente activo de este plantel.');
+      if (!period.subjectName.trim() || !period.startTime || !period.endTime || period.endTime <= period.startTime) {
+        throw new Error('Revisa la materia y el horario: la hora final debe ser posterior a la inicial.');
+      }
+      return { ...period, teacherName: teacher.name, teacherAvatar: teacher.avatar };
+    });
+    const updatedGroup = { ...group, schedule: normalizedSchedule };
+    await syncGroupToCloud(updatedGroup);
+    setGroups((prev) => prev.map((item) => item.id === groupId ? updatedGroup : item));
 
     pushNotification(
       'schedule_updated',
       'Horario Escolar Actualizado',
-      `Tu Orientador ha actualizado el horario oficial de tu grupo.`,
+      'Se actualizó el horario oficial del grupo.',
       'student',
       { groupId }
     );
