@@ -70,6 +70,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
 
   // Modals
   const [isAddPeriodOpen, setIsAddPeriodOpen] = useState<boolean>(false);
+  const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [subjectName, setSubjectName] = useState<string>('');
   const [startTime, setStartTime] = useState<string>('');
   const [endTime, setEndTime] = useState<string>('');
@@ -116,8 +117,11 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
     if (!currentGroup || !subjectName.trim()) return;
 
     const teacher = allTeachers.find((t) => t.id === selectedTeacherId) || allTeachers[0];
+    if (endTime <= startTime) { window.alert('La hora de fin debe ser posterior a la hora de inicio.'); return; }
+    const previous = editingPeriodId ? currentGroup.schedule.find((item) => item.id === editingPeriodId) : undefined;
     const newPeriod: GroupScheduleItem = {
-      id: `sch-${Date.now()}`,
+      ...(previous || {} as GroupScheduleItem),
+      id: previous?.id || `sch-${Date.now()}`,
       dayOfWeek: 'Lunes a Viernes',
       startTime,
       endTime,
@@ -129,15 +133,25 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
       teacherAvatar: teacher.avatar,
       classroom,
       building: classroom.includes('Lab') ? 'Edificio Ciencias' : 'Edificio A',
-      currentPin: Math.floor(1000 + Math.random() * 9000).toString(),
-      beaconUuid: `e2c56db5-dffb-48d2-b060-${Math.random().toString(36).slice(2, 10)}`,
+      currentPin: previous?.currentPin || Math.floor(1000 + Math.random() * 9000).toString(),
+      beaconUuid: previous?.beaconUuid || `e2c56db5-dffb-48d2-b060-${Math.random().toString(36).slice(2, 10)}`,
       color: '#4f46e5',
     };
 
-    const updated = [...currentGroup.schedule, newPeriod];
+    const updated = previous
+      ? currentGroup.schedule.map((item) => item.id === editingPeriodId ? newPeriod : item)
+      : [...currentGroup.schedule, newPeriod];
     onUpdateGroupSchedule(currentGroup.id, updated);
     setIsAddPeriodOpen(false);
+    setEditingPeriodId(null);
     setSubjectName('');
+    setStartTime(''); setEndTime(''); setClassroom('');
+  };
+
+  const handleEditSchedulePeriod = (period: GroupScheduleItem) => {
+    setEditingPeriodId(period.id); setSubjectName(period.subjectName); setStartTime(period.startTime);
+    setEndTime(period.endTime); setToleranceMinutes(period.toleranceMinutes || 10);
+    setSelectedTeacherId(period.teacherId); setClassroom(period.classroom); setIsAddPeriodOpen(true);
   };
 
   const handleDeleteSchedulePeriod = (periodId: string) => {
@@ -477,7 +491,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
 
               <button
                 type="button"
-                onClick={() => setIsAddPeriodOpen(true)}
+                onClick={() => { setEditingPeriodId(null); setSubjectName(''); setStartTime(''); setEndTime(''); setClassroom(''); setIsAddPeriodOpen(true); }}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-all shadow-xs"
               >
                 <Plus className="w-4 h-4" />
@@ -488,7 +502,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
             {isAddPeriodOpen && (
               <div className="p-5 bg-slate-50 border border-slate-300 rounded-2xl space-y-4">
                 <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  Programar Nueva Materia en el Horario
+                  {editingPeriodId ? 'Editar Materia del Horario' : 'Programar Nueva Materia en el Horario'}
                 </h4>
                 <form onSubmit={handleAddSchedulePeriod} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
                   <div>
@@ -565,7 +579,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                   <div className="sm:col-span-2 lg:col-span-5 flex justify-end gap-2 pt-2">
                     <button
                       type="button"
-                      onClick={() => setIsAddPeriodOpen(false)}
+                      onClick={() => { setIsAddPeriodOpen(false); setEditingPeriodId(null); }}
                       className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg"
                     >
                       Cancelar
@@ -574,7 +588,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                       type="submit"
                       className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs"
                     >
-                      Guardar en el Horario
+                      {editingPeriodId ? 'Guardar cambios' : 'Guardar en el Horario'}
                     </button>
                   </div>
                 </form>
@@ -611,6 +625,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
 
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-slate-400">PIN: {item.currentPin}</span>
+                    <button type="button" onClick={() => handleEditSchedulePeriod(item)} className="rounded-lg px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">Editar</button>
                     <button
                       type="button"
                       onClick={() => handleDeleteSchedulePeriod(item.id)}
