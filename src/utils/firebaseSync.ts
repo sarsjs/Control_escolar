@@ -19,8 +19,12 @@ import { Student, SchoolGroup, AuditLogEntry, AttendanceDispute, SystemNotificat
 export { testFirestoreConnection };
 
 /** Treat attendance as a daily state; yesterday's presence must not remain today's status. */
+function getLocalDateKey(date = new Date()): string {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+}
+
 function normalizeStudentForCurrentDay(student: Student): Student {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateKey();
   const validatedDate = typeof student.validatedAt === 'string' ? student.validatedAt.slice(0, 10) : '';
   if (student.currentStatus !== 'outside_school' && validatedDate !== today) {
     return { ...student, currentStatus: 'outside_school', validatedVia: null, validatedAt: undefined };
