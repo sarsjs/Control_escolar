@@ -912,13 +912,6 @@ export default function App() {
     await syncGroupToCloud(updatedGroup);
     setGroups((prev) => prev.map((item) => item.id === groupId ? updatedGroup : item));
 
-    pushNotification(
-      'schedule_updated',
-      'Horario Escolar Actualizado',
-      'Se actualizó el horario oficial del grupo.',
-      'student',
-      { groupId }
-    );
   };
 
   // 12. Orientador enrolls individual student
