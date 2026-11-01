@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SchoolInstitution, UserAccount } from '../types';
+import { SchoolInstitution, UserAccount, Student, SchoolGroup } from '../types';
 import {
   Building2,
   Plus,
@@ -25,6 +25,8 @@ import {
 interface SuperAdminDashboardViewProps {
   currentUser: UserAccount;
   schools: SchoolInstitution[];
+  students: Student[];
+  groups: SchoolGroup[];
   onAddSchool: (school: SchoolInstitution) => Promise<void>;
   onUpdateSchool: (school: SchoolInstitution) => Promise<void>;
   onProvisionDirector: (schoolId: string) => Promise<void>;
@@ -33,6 +35,8 @@ interface SuperAdminDashboardViewProps {
 export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = ({
   currentUser,
   schools,
+  students,
+  groups,
   onAddSchool,
   onUpdateSchool,
   onProvisionDirector,
@@ -74,7 +78,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     return matchesSearch && matchesStatus;
   });
 
-  const totalStudents = schools.reduce((acc, curr) => acc + curr.enrolledStudentsCount, 0);
+  const totalStudents = students.filter((student) => student.active !== false).length;
   const activeSchoolsCount = schools.filter((s) => s.status === 'active').length;
   const geofencesConfiguredCount = schools.filter((school) =>
     Number.isFinite(school.latitude) && Number.isFinite(school.longitude)
@@ -438,7 +442,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             {/* Card Footer Actions */}
             <div className="p-4 bg-slate-50/50 flex items-center justify-between gap-3 text-xs">
               <span className="text-[11px] text-slate-500">
-                Alumnos: <strong className="text-slate-800">{school.enrolledStudentsCount}</strong> / {school.maxStudents}
+                Alumnos: <strong className="text-slate-800">{students.filter((student) => student.schoolId === school.id && student.active !== false).length}</strong> / {school.maxStudents} · Grupos: <strong className="text-slate-800">{groups.filter((group) => group.schoolId === school.id && group.active !== false).length}</strong>
               </span>
 
               <div className="flex flex-wrap items-center gap-2">
