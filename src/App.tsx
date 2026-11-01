@@ -500,7 +500,7 @@ export default function App() {
       modifiedBy: currentUser.name,
       modifiedByRole: currentUser.role,
       reason,
-      timestamp: now,
+      timestamp: localValidatedAt,
     };
     await syncAttendanceCorrectionToCloud(updatedStudent, newAuditLog);
 
