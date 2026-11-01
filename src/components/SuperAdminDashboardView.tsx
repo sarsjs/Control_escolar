@@ -25,8 +25,8 @@ import {
 interface SuperAdminDashboardViewProps {
   currentUser: UserAccount;
   schools: SchoolInstitution[];
-  onAddSchool: (school: SchoolInstitution) => void;
-  onUpdateSchool: (school: SchoolInstitution) => void;
+  onAddSchool: (school: SchoolInstitution) => Promise<void>;
+  onUpdateSchool: (school: SchoolInstitution) => Promise<void>;
   onProvisionDirector: (schoolId: string) => Promise<void>;
 }
 
@@ -43,6 +43,8 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
   const [editingSchool, setEditingSchool] = useState<SchoolInstitution | null>(null);
   const [provisioningSchoolId, setProvisioningSchoolId] = useState<string>('');
   const [directorAccessFeedback, setDirectorAccessFeedback] = useState<Record<string, { type: 'success' | 'error'; message: string }>>({});
+  const [schoolSaveBusy, setSchoolSaveBusy] = useState(false);
+  const [schoolSaveError, setSchoolSaveError] = useState('');
 
   // Form state for creating new school
   const [formName, setFormName] = useState<string>('');
@@ -96,26 +98,30 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     }
   };
 
-  const handleSaveNewSchool = (e: React.FormEvent) => {
+  const handleSaveNewSchool = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName || !formCct || !formDirectorName || !formDirectorEmail) return;
+    setSchoolSaveError('');
+    if (!formName.trim() || !formCct.trim() || !formDirectorName.trim() || !formDirectorEmail.trim()) {
+      setSchoolSaveError('Completa el nombre, CCT y datos del director.');
+      return;
+    }
 
     const newSchoolId = `sch-${Date.now()}`;
     const newSchool: SchoolInstitution = {
       id: newSchoolId,
-      name: formName,
+      name: formName.trim(),
       slug: formName.toLowerCase().replace(/\s+/g, '-').slice(0, 20),
       logo: formLogo,
-      cct: formCct.toUpperCase(),
+      cct: formCct.toUpperCase().trim(),
       address: formAddress,
       entryTime: formEntryTime,
       latitude: formLat,
       longitude: formLng,
       geofenceRadiusMeters: formGeofenceRadius,
-      directorName: formDirectorName,
-      directorEmail: formDirectorEmail,
+      directorName: formDirectorName.trim(),
+      directorEmail: formDirectorEmail.trim().toLowerCase(),
       directorPhone: formDirectorPhone,
-      directorUsername: formDirectorEmail,
+      directorUsername: formDirectorEmail.trim().toLowerCase(),
       status: 'active',
       createdAt: new Date().toISOString().split('T')[0],
       subscriptionPlan: formPlan,
@@ -124,11 +130,16 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
       groupsCount: 0,
     };
 
-
-
-    onAddSchool(newSchool);
-    setIsAddModalOpen(false);
-    resetForm();
+    setSchoolSaveBusy(true);
+    try {
+      await onAddSchool(newSchool);
+      setIsAddModalOpen(false);
+      resetForm();
+    } catch (error) {
+      setSchoolSaveError(error instanceof Error ? error.message : 'No se pudo guardar el plantel.');
+    } finally {
+      setSchoolSaveBusy(false);
+    }
   };
 
   const provisionDirectorAccess = async (school: SchoolInstitution) => {
@@ -153,11 +164,19 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     setFormDirectorPhone('');
   };
 
-  const handleSaveEditedSchool = (e: React.FormEvent) => {
+  const handleSaveEditedSchool = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSchool) return;
-    onUpdateSchool(editingSchool);
-    setEditingSchool(null);
+    setSchoolSaveError('');
+    setSchoolSaveBusy(true);
+    try {
+      await onUpdateSchool(editingSchool);
+      setEditingSchool(null);
+    } catch (error) {
+      setSchoolSaveError(error instanceof Error ? error.message : 'No se pudieron guardar los cambios.');
+    } finally {
+      setSchoolSaveBusy(false);
+    }
   };
 
   return (
@@ -468,6 +487,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             </div>
 
             <form onSubmit={handleSaveNewSchool} className="p-6 space-y-5 overflow-y-auto flex-1 text-xs">
+              {schoolSaveError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{schoolSaveError}</p>}
               {/* Sección 1: Datos Generales */}
               <div className="space-y-3">
                 <h4 className="font-bold text-slate-900 border-b border-slate-200 pb-1.5 text-xs uppercase tracking-wider text-indigo-700">
@@ -694,9 +714,10 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98]"
+                  disabled={schoolSaveBusy}
+                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98] disabled:opacity-50"
                 >
-                  Guardar plantel
+                  {schoolSaveBusy ? 'Guardando…' : 'Guardar plantel'}
                 </button>
               </div>
             </form>
@@ -725,6 +746,7 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
             </div>
 
             <form onSubmit={handleSaveEditedSchool} className="p-6 space-y-4 text-xs">
+              {schoolSaveError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{schoolSaveError}</p>}
               <div className="space-y-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
@@ -864,9 +886,10 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98]"
+                  disabled={schoolSaveBusy}
+                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98] disabled:opacity-50"
                 >
-                  Actualizar Parámetros
+                  {schoolSaveBusy ? 'Guardando…' : 'Actualizar Parámetros'}
                 </button>
               </div>
             </form>
