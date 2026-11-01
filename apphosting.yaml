@@ -10,3 +10,4 @@ outputFiles:
       - server.js
       - firebase-applet-config.json
       - package.json
+      - node_modules
