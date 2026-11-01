@@ -646,25 +646,30 @@ export default function App() {
   };
 
   // 8. Director reassigns group
-  const handleReassignGroupToOrientador = (groupId: string, newOrientadorId: string) => {
-    setGroups((prev) =>
-      prev.map((g) => (g.id === groupId ? { ...g, orientadorId: newOrientadorId } : g))
-    );
-
-    setOrientadores((prev) =>
-      prev.map((ori) => {
-        if (ori.id === newOrientadorId) {
-          return {
-            ...ori,
-            assignedGroupIds: Array.from(new Set([...ori.assignedGroupIds, groupId])),
-          };
-        }
-        return {
-          ...ori,
-          assignedGroupIds: ori.assignedGroupIds.filter((id) => id !== groupId),
-        };
-      })
-    );
+  const handleReassignGroupToOrientador = async (groupId: string, newOrientadorId: string) => {
+    if (currentUser?.role !== 'director' || !currentUser.schoolId) {
+      throw new Error('Solo Dirección puede reasignar grupos.');
+    }
+    const group = groups.find((item) => item.id === groupId && item.schoolId === currentUser.schoolId);
+    if (!group) throw new Error('No se encontró el grupo de este plantel.');
+    const target = orientadores.find((item) => item.id === newOrientadorId && item.schoolId === currentUser.schoolId && item.active !== false);
+    if (!target) throw new Error('Selecciona un orientador activo de este plantel.');
+    const updatedGroup = { ...group, orientadorId: newOrientadorId };
+    const updatedOrientadores = orientadores.map((item) => {
+      const ids = new Set(item.assignedGroupIds || []);
+      ids.delete(groupId);
+      if (item.id === newOrientadorId) ids.add(groupId);
+      return { ...item, assignedGroupIds: [...ids] };
+    });
+    // Persist the authoritative group assignment before updating the visible state.
+    await syncGroupToCloud(updatedGroup);
+    for (const item of updatedOrientadores) {
+      if (item.id === target.id || item.assignedGroupIds.length !== (orientadores.find((oldItem) => oldItem.id === item.id)?.assignedGroupIds || []).length) {
+        await syncOrientadorToCloud(item);
+      }
+    }
+    setGroups((prev) => prev.map((item) => item.id === groupId ? updatedGroup : item));
+    setOrientadores(updatedOrientadores);
   };
 
   // 9. Director assigns temporary substitute orientador
