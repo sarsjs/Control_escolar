@@ -1224,6 +1224,8 @@ export default function App() {
           <SuperAdminDashboardView
             currentUser={currentUser}
             schools={schools}
+            students={students}
+            groups={groups}
             onAddSchool={handleAddSchool}
             onUpdateSchool={handleUpdateSchool}
             onProvisionDirector={handleProvisionDirector}
