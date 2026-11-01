@@ -225,6 +225,52 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Staff directory records: school-scoped. Staff may read only their own linked
+    // record; directors manage records belonging to their school.
+    match /orientadores/{orientadorId} {
+      allow read: if isSuperAdmin()
+        || (resource.data.schoolId is string
+          && canAccessSchool(resource.data.schoolId)
+          && (profile().role == 'director'
+            || (profile().role == 'orientador'
+              && profile().linkedEntityId == orientadorId)));
+      allow create: if isSuperAdmin()
+        || (request.resource.data.schoolId is string
+          && canAccessSchool(request.resource.data.schoolId)
+          && profile().role == 'director');
+      allow update: if isSuperAdmin()
+        || (resource.data.schoolId is string
+          && request.resource.data.schoolId == resource.data.schoolId
+          && canAccessSchool(resource.data.schoolId)
+          && profile().role == 'director');
+      allow delete: if isSuperAdmin()
+        || (resource.data.schoolId is string
+          && canAccessSchool(resource.data.schoolId)
+          && profile().role == 'director');
+    }
+
+    match /teachers/{teacherId} {
+      allow read: if isSuperAdmin()
+        || (resource.data.schoolId is string
+          && canAccessSchool(resource.data.schoolId)
+          && (profile().role == 'director'
+            || (profile().role == 'teacher'
+              && profile().linkedEntityId == teacherId)));
+      allow create: if isSuperAdmin()
+        || (request.resource.data.schoolId is string
+          && canAccessSchool(request.resource.data.schoolId)
+          && profile().role == 'director');
+      allow update: if isSuperAdmin()
+        || (resource.data.schoolId is string
+          && request.resource.data.schoolId == resource.data.schoolId
+          && canAccessSchool(resource.data.schoolId)
+          && profile().role == 'director');
+      allow delete: if isSuperAdmin()
+        || (resource.data.schoolId is string
+          && canAccessSchool(resource.data.schoolId)
+          && profile().role == 'director');
+    }
+
     match /notifications/{notificationId} {
       allow read, create, update, delete: if isSuperAdmin();
     }
