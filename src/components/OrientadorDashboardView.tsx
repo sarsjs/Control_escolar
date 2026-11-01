@@ -848,7 +848,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                       disabled={newStudentBusy}
                       className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs disabled:opacity-50"
                     >
-                      {newStudentBusy ? 'Guardando…' : 'Guardar Alumno'
+                      {newStudentBusy ? 'Guardando…' : 'Guardar Alumno'}
                     </button>
                   </div>
                 </form>
