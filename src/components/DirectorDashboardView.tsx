@@ -37,7 +37,7 @@ interface DirectorDashboardViewProps {
   auditLogs: AuditLogEntry[];
   disputes: AttendanceDispute[];
   simulatedTime: string;
-  onReassignGroupToOrientador: (groupId: string, newOrientadorId: string) => void;
+  onReassignGroupToOrientador: (groupId: string, newOrientadorId: string) => Promise<void>;
   onAssignTemporarySubstitute: (groupId: string, substituteOrientadorId?: string) => Promise<void>;
   onCreateNewGroup?: (name: string, semester: number, orientadorId: string) => Promise<void>;
   onDirectorCorrectAttendance: (
@@ -90,6 +90,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
   const [editGroupActive, setEditGroupActive] = useState(true);
   const [groupBusy, setGroupBusy] = useState(false);
   const [groupError, setGroupError] = useState('');
+  const [groupActionError, setGroupActionError] = useState('');
 
   // Modals
   const [isAddGroupOpen, setIsAddGroupOpen] = useState<boolean>(false);
@@ -110,24 +111,34 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
   const enRouteCount = students.filter((s) => s.currentStatus === 'en_route_delayed').length;
   const absentCount = students.filter((s) => s.currentStatus === 'outside_school' || s.currentStatus === 'absent').length;
 
-  const handleReassign = (groupId: string, orientadorId: string) => {
-    onReassignGroupToOrientador(groupId, orientadorId);
-    const grp = groups.find((g) => g.id === groupId);
-    const ori = orientadores.find((o) => o.id === orientadorId);
-    setSuccessMessage(`Se ha asignado ${grp?.name} permanentemente a ${ori?.name}.`);
-    setTimeout(() => setSuccessMessage(''), 4000);
+  const handleReassign = async (groupId: string, orientadorId: string) => {
+    setGroupActionError('');
+    try {
+      await onReassignGroupToOrientador(groupId, orientadorId);
+      const grp = groups.find((g) => g.id === groupId);
+      const ori = orientadores.find((o) => o.id === orientadorId);
+      setSuccessMessage(`Se ha asignado ${grp?.name} permanentemente a ${ori?.name}.`);
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (error) {
+      setGroupActionError(error instanceof Error ? error.message : 'No se pudo reasignar el grupo.');
+    }
   };
 
-  const handleSubstitute = (groupId: string, substituteId: string) => {
-    onAssignTemporarySubstitute(groupId, substituteId === 'none' ? undefined : substituteId);
-    const grp = groups.find((g) => g.id === groupId);
-    const sub = orientadores.find((o) => o.id === substituteId);
-    setSuccessMessage(
-      sub
-        ? `Sustitución temporal asignada para ${grp?.name} a cargo de ${sub.name}.`
-        : `Sustitución temporal finalizada para ${grp?.name}. Retorna al Orientador titular.`
-    );
-    setTimeout(() => setSuccessMessage(''), 4000);
+  const handleSubstitute = async (groupId: string, substituteId: string) => {
+    setGroupActionError('');
+    try {
+      await onAssignTemporarySubstitute(groupId, substituteId === 'none' ? undefined : substituteId);
+      const grp = groups.find((g) => g.id === groupId);
+      const sub = orientadores.find((o) => o.id === substituteId);
+      setSuccessMessage(
+        sub
+          ? `Sustitución temporal asignada para ${grp?.name} a cargo de ${sub.name}.`
+          : `Sustitución temporal finalizada para ${grp?.name}. Retorna al Orientador titular.`
+      );
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (error) {
+      setGroupActionError(error instanceof Error ? error.message : 'No se pudo actualizar la sustitución.');
+    }
   };
 
   const handleCreateGroup = async (e: React.FormEvent) => {
@@ -206,6 +217,12 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
         <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl text-xs text-emerald-800 font-medium flex items-center gap-2 animate-in fade-in">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{successMessage}</span>
+        </div>
+      )}
+
+      {groupActionError && (
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+          {groupActionError}
         </div>
       )}
 
