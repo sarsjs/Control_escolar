@@ -254,10 +254,10 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
         </div>
 
         <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200">
-          <span className="text-xs font-semibold text-amber-900">En Campus Fuera de Aula</span>
+          <span className="text-xs font-semibold text-amber-900">Marcados en Plantel sin Aula</span>
           <div className="mt-1 flex items-baseline gap-2">
             <span className="text-2xl font-black font-mono text-amber-600">{onCampusOutsideCount}</span>
-            <span className="text-xs text-amber-800 font-semibold">deambulando</span>
+            <span className="text-xs text-amber-800 font-semibold">sin validación de salón</span>
           </div>
           <span className="text-[11px] text-amber-700 mt-1 block">En pasillos durante clase</span>
         </div>
