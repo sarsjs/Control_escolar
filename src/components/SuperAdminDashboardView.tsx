@@ -27,6 +27,7 @@ interface SuperAdminDashboardViewProps {
   schools: SchoolInstitution[];
   onAddSchool: (school: SchoolInstitution) => void;
   onUpdateSchool: (school: SchoolInstitution) => void;
+  onProvisionDirector: (schoolId: string) => Promise<void>;
 }
 
 export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = ({
@@ -34,11 +35,14 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
   schools,
   onAddSchool,
   onUpdateSchool,
+  onProvisionDirector,
 }) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'trial' | 'suspended'>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [editingSchool, setEditingSchool] = useState<SchoolInstitution | null>(null);
+  const [provisioningSchoolId, setProvisioningSchoolId] = useState<string>('');
+  const [directorAccessFeedback, setDirectorAccessFeedback] = useState<Record<string, { type: 'success' | 'error'; message: string }>>({});
 
   // Form state for creating new school
   const [formName, setFormName] = useState<string>('');
@@ -118,6 +122,19 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
     onAddSchool(newSchool);
     setIsAddModalOpen(false);
     resetForm();
+  };
+
+  const provisionDirectorAccess = async (school: SchoolInstitution) => {
+    setProvisioningSchoolId(school.id);
+    setDirectorAccessFeedback((prev) => ({ ...prev, [school.id]: { type: 'success', message: 'Procesando solicitud…' } }));
+    try {
+      await onProvisionDirector(school.id);
+      setDirectorAccessFeedback((prev) => ({ ...prev, [school.id]: { type: 'success', message: 'Cuenta creada o verificada. Se solicitó el correo para configurar la contraseña.' } }));
+    } catch (error) {
+      setDirectorAccessFeedback((prev) => ({ ...prev, [school.id]: { type: 'error', message: error instanceof Error ? error.message : 'No se pudo crear el acceso.' } }));
+    } finally {
+      setProvisioningSchoolId('');
+    }
   };
 
   const resetForm = () => {
@@ -386,13 +403,27 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
               </div>
             </div>
 
+            {directorAccessFeedback[school.id] && (
+              <p role={directorAccessFeedback[school.id].type === 'error' ? 'alert' : 'status'}
+                className={`px-6 pb-2 text-xs ${directorAccessFeedback[school.id].type === 'error' ? 'text-rose-700' : 'text-emerald-700'}`}>
+                {directorAccessFeedback[school.id].message}
+              </p>
+            )}
             {/* Card Footer Actions */}
             <div className="p-4 bg-slate-50/50 flex items-center justify-between gap-3 text-xs">
               <span className="text-[11px] text-slate-500">
                 Alumnos: <strong className="text-slate-800">{school.enrolledStudentsCount}</strong> / {school.maxStudents}
               </span>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void provisionDirectorAccess(school)}
+                  disabled={provisioningSchoolId === school.id || school.status === 'suspended' || !school.directorName?.trim() || !school.directorEmail?.trim()}
+                  className="px-3 py-1.5 rounded-xl border border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-semibold transition-colors disabled:opacity-50"
+                >
+                  {provisioningSchoolId === school.id ? 'Procesando…' : 'Crear / reenviar acceso del director'}
+                </button>
                 <button
                   type="button"
                   onClick={() => setEditingSchool(school)}
@@ -401,7 +432,6 @@ export const SuperAdminDashboardView: React.FC<SuperAdminDashboardViewProps> = (
                   <Edit3 className="w-3.5 h-3.5" />
                   <span>Ajustar Cerca / Datos</span>
                 </button>
-
               </div>
             </div>
           </div>
