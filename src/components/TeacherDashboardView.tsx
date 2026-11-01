@@ -20,7 +20,6 @@ interface TeacherDashboardViewProps {
   allTeacherGroups: SchoolGroup[];
   students: Student[];
   onSelectGroup: (group: SchoolGroup) => void;
-  onSendStudentAlert: (studentId: string, studentName: string) => void;
   onManualValidateStudent: (studentId: string) => Promise<void>;
 }
 
@@ -30,7 +29,6 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
   allTeacherGroups,
   students,
   onSelectGroup,
-  onSendStudentAlert,
   onManualValidateStudent,
 }) => {
   const [activeTabFilter, setActiveTabFilter] = useState<'all' | 'in_class' | 'on_campus' | 'delayed' | 'absent'>('all');
@@ -267,14 +265,7 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => onSendStudentAlert(st.id, st.name)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-lg transition-colors"
-                  >
-                    <BellRing className="w-3 h-3" />
-                    <span>Llamar al Aula</span>
-                  </button>
+                  <span className="text-[10px] text-slate-500">Aviso directo pendiente</span>
                   <button
                     type="button"
                     disabled
