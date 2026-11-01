@@ -34,7 +34,7 @@ interface OrientadorDashboardViewProps {
   disputes: AttendanceDispute[];
   simulatedTime: string;
   onCreateGroup: (name: string, semester: number, turn: 'Matutino' | 'Vespertino') => Promise<void>;
-  onUpdateGroupSchedule: (groupId: string, newSchedule: GroupScheduleItem[]) => void;
+  onUpdateGroupSchedule: (groupId: string, newSchedule: GroupScheduleItem[]) => Promise<void>;
   onAddStudentToGroup: (groupId: string, studentName: string, matricula: string) => Promise<void>;
   onUpdateStudent: (student: Student) => void;
   onImportStudentsCsv: (groupId: string, csvData: { name: string; matricula: string; email?: string }[]) => Promise<void>;
@@ -75,6 +75,8 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   const [newGroupTurn, setNewGroupTurn] = useState<'Matutino' | 'Vespertino'>('Matutino');
   const [groupCreateError, setGroupCreateError] = useState('');
   const [groupCreateBusy, setGroupCreateBusy] = useState(false);
+  const [scheduleSaveError, setScheduleSaveError] = useState('');
+  const [scheduleSaveBusy, setScheduleSaveBusy] = useState(false);
 
   // Modals
   const [isAddPeriodOpen, setIsAddPeriodOpen] = useState<boolean>(false);
@@ -136,9 +138,13 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
     myGroups.some((g) => g.id === d.groupId)
   );
 
-  const handleAddSchedulePeriod = (e: React.FormEvent) => {
+  const handleAddSchedulePeriod = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentGroup || !subjectName.trim()) return;
+    setScheduleSaveError('');
+    if (!currentGroup || !subjectName.trim()) {
+      setScheduleSaveError('Selecciona un grupo y escribe el nombre de la materia.');
+      return;
+    }
 
     const teacher = activeTeachers.find((t) => t.id === selectedTeacherId);
     if (!teacher) {
@@ -147,7 +153,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
         : 'No hay docentes activos registrados en este plantel. Solicita a Dirección que registre o active uno.');
       return;
     }
-    if (endTime <= startTime) { window.alert('La hora de fin debe ser posterior a la hora de inicio.'); return; }
+    if (!startTime || !endTime || endTime <= startTime || !classroom.trim()) { setScheduleSaveError('Revisa las horas y el salón; la hora final debe ser posterior a la inicial.'); return; }
     const previous = editingPeriodId ? currentGroup.schedule.find((item) => item.id === editingPeriodId) : undefined;
     const newPeriod: GroupScheduleItem = {
       ...(previous || {} as GroupScheduleItem),
@@ -171,11 +177,18 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
     const updated = previous
       ? currentGroup.schedule.map((item) => item.id === editingPeriodId ? newPeriod : item)
       : [...currentGroup.schedule, newPeriod];
-    onUpdateGroupSchedule(currentGroup.id, updated);
-    setIsAddPeriodOpen(false);
-    setEditingPeriodId(null);
-    setSubjectName('');
-    setStartTime(''); setEndTime(''); setClassroom('');
+    setScheduleSaveBusy(true);
+    try {
+      await onUpdateGroupSchedule(currentGroup.id, updated);
+      setIsAddPeriodOpen(false);
+      setEditingPeriodId(null);
+      setSubjectName('');
+      setStartTime(''); setEndTime(''); setClassroom('');
+    } catch (error) {
+      setScheduleSaveError(error instanceof Error ? error.message : 'No se pudo guardar el horario.');
+    } finally {
+      setScheduleSaveBusy(false);
+    }
   };
 
   const handleEditSchedulePeriod = (period: GroupScheduleItem) => {
@@ -594,6 +607,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                   {editingPeriodId ? 'Editar Materia del Horario' : 'Programar Nueva Materia en el Horario'}
                 </h4>
                 <form onSubmit={handleAddSchedulePeriod} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
+                  {scheduleSaveError && <p role="alert" className="sm:col-span-2 lg:col-span-5 rounded-lg bg-rose-50 p-3 text-rose-700">{scheduleSaveError}</p>}
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">Nombre de la Materia</label>
                     <input
