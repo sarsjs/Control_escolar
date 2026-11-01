@@ -1050,8 +1050,8 @@ export default function App() {
   };
 
   // 15. Teacher manual validate with audit
-  const handleTeacherManualValidate = (studentId: string) => {
-    handleDirectorCorrectAttendance(
+  const handleTeacherManualValidate = async (studentId: string) => {
+    await handleDirectorCorrectAttendance(
       studentId,
       'in_class',
       'Pase de lista presencial por el docente en el aula.'
