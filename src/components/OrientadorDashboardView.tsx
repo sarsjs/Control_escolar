@@ -35,7 +35,7 @@ interface OrientadorDashboardViewProps {
   simulatedTime: string;
   onCreateGroup: (name: string, semester: number, turn: 'Matutino' | 'Vespertino') => void;
   onUpdateGroupSchedule: (groupId: string, newSchedule: GroupScheduleItem[]) => void;
-  onAddStudentToGroup: (groupId: string, studentName: string, matricula: string) => void;
+  onAddStudentToGroup: (groupId: string, studentName: string, matricula: string) => Promise<void>;
   onUpdateStudent: (student: Student) => void;
   onImportStudentsCsv: (groupId: string, csvData: { name: string; matricula: string; email?: string }[]) => Promise<void>;
   onSendAlertToStudent: (studentId: string, studentName: string) => void;
@@ -88,6 +88,8 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   const [isAddStudentOpen, setIsAddStudentOpen] = useState<boolean>(false);
   const [newStudentName, setNewStudentName] = useState<string>('');
   const [newStudentMatricula, setNewStudentMatricula] = useState<string>('');
+  const [newStudentError, setNewStudentError] = useState<string>('');
+  const [newStudentBusy, setNewStudentBusy] = useState(false);
 
   // CSV import
   const [isCsvModalOpen, setIsCsvModalOpen] = useState<boolean>(false);
@@ -190,13 +192,24 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
     onUpdateStudent({ ...student, active: next, lastUpdated: new Date().toISOString() });
   };
 
-  const handleCreateStudent = (e: React.FormEvent) => {
+  const handleCreateStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentGroup || !newStudentName.trim() || !newStudentMatricula.trim()) return;
-    onAddStudentToGroup(currentGroup.id, newStudentName, newStudentMatricula);
-    setNewStudentName('');
-    setNewStudentMatricula('');
-    setIsAddStudentOpen(false);
+    setNewStudentError('');
+    if (!currentGroup || !newStudentName.trim() || !newStudentMatricula.trim()) {
+      setNewStudentError('El nombre y la matrícula son obligatorios.');
+      return;
+    }
+    setNewStudentBusy(true);
+    try {
+      await onAddStudentToGroup(currentGroup.id, newStudentName, newStudentMatricula);
+      setNewStudentName('');
+      setNewStudentMatricula('');
+      setIsAddStudentOpen(false);
+    } catch (error) {
+      setNewStudentError(error instanceof Error ? error.message : 'No se pudo guardar la inscripción.');
+    } finally {
+      setNewStudentBusy(false);
+    }
   };
 
   const handleProcessCsvImport = async (e: React.FormEvent) => {
@@ -797,6 +810,7 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                   Matricular Alumno en {currentGroup?.name}
                 </h4>
                 <form onSubmit={handleCreateStudent} className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {newStudentError && <p role="alert" className="sm:col-span-2 rounded-lg bg-rose-50 p-3 text-rose-700">{newStudentError}</p>}
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">Nombre Completo del Alumno</label>
                     <input
@@ -831,9 +845,10 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs"
+                      disabled={newStudentBusy}
+                      className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs disabled:opacity-50"
                     >
-                      Guardar Alumno
+                      {newStudentBusy ? 'Guardando…' : 'Guardar Alumno'
                     </button>
                   </div>
                 </form>
