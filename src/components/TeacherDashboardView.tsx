@@ -33,7 +33,6 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
   onSendStudentAlert,
   onManualValidateStudent,
 }) => {
-  const [projectorMode, setProjectorMode] = useState<boolean>(false);
   const [activeTabFilter, setActiveTabFilter] = useState<'all' | 'in_class' | 'on_campus' | 'delayed' | 'absent'>('all');
   const [validatingStudentId, setValidatingStudentId] = useState<string>('');
   const [validationFeedback, setValidationFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -122,30 +121,9 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
             </div>
           )}
 
-          {/* PIN Projector Box for the Whiteboard */}
-          <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-md flex items-center gap-4 border border-slate-800">
-            <div>
-              <span className="text-[10px] font-mono tracking-wider uppercase text-slate-400 block">
-                Código PIN de Aula
-              </span>
-              <span className="text-3xl font-black font-mono tracking-widest text-emerald-400">
-                {activeClass?.currentPin || 'Pendiente'}
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-1 border-l border-slate-700 pl-3">
-              <span className="px-1.5 py-1 text-[10px] text-slate-300" title="La validación se habilitará después de conectar un flujo seguro">
-                Validación pendiente
-              </span>
-              <button
-                type="button"
-                onClick={() => setProjectorMode(!projectorMode)}
-                title="Modo Proyector para Pantalla Completa"
-                className="p-1.5 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg transition-colors"
-              >
-                {projectorMode ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              </button>
-            </div>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+            <strong>Pase de lista manual disponible</strong>
+            <p className="mt-1">La validación por BLE, PIN y QR todavía no está habilitada.</p>
           </div>
         </div>
       </div>
@@ -158,23 +136,6 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
         <span className="font-mono text-slate-400 text-[11px]">{groupStudents.length} alumnos en lista</span>
       </div>
 
-      {/* Projector Full-Width Callout */}
-      {projectorMode && (
-        <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 text-white rounded-3xl p-8 shadow-2xl border border-indigo-500/30 text-center space-y-4">
-          <span className="text-xs font-mono uppercase tracking-widest text-indigo-300">
-            {activeClass?.subjectName} · {activeClass?.classroom} · {activeGroup.name}
-          </span>
-          <h3 className="text-2xl font-bold">Ingresa este código en tu aplicación para registrar asistencia:</h3>
-          <div className="inline-block px-10 py-4 bg-black/60 rounded-3xl border-2 border-emerald-400/50 shadow-inner">
-            <span className="text-6xl font-black font-mono tracking-widest text-emerald-400">
-              {activeClass?.currentPin}
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 max-w-lg mx-auto">
-            La validación por PIN y Bluetooth aún no está habilitada; no se registrarán asistencias simuladas.
-          </p>
-        </div>
-      )}
 
       {validationFeedback && (
         <p role={validationFeedback.type === 'error' ? 'alert' : 'status'}
