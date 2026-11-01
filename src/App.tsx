@@ -51,6 +51,7 @@ import {
   syncGroupToCloud,
   subscribeToGroups,
   subscribeToDisputes,
+  subscribeToAuditLogs,
   subscribeToOrientadores,
   subscribeToTeachers,
   syncOrientadorToCloud,
@@ -211,6 +212,7 @@ export default function App() {
     let unsubscribeStudentGroup: (() => void) | undefined;
     let unsubscribeOrientadores: (() => void) | undefined;
     let unsubscribeTeachers: (() => void) | undefined;
+    let unsubscribeAuditLogs: (() => void) | undefined;
     const unsubscribeDisputes = subscribeToDisputes(
       currentUser.schoolId,
       isSuperAdmin,
@@ -218,6 +220,16 @@ export default function App() {
       currentUser.role === 'student',
       (cloudDisputes) => setDisputes(cloudDisputes)
     );
+
+    if (currentUser.role === 'student') {
+      setAuditLogs([]);
+    } else {
+      unsubscribeAuditLogs = subscribeToAuditLogs(
+        currentUser.schoolId,
+        isSuperAdmin,
+        (cloudAuditLogs) => setAuditLogs(cloudAuditLogs)
+      );
+    }
 
     if (currentUser.role === 'student') {
       // Students must not query the whole school roster. Read only their own
@@ -283,6 +295,7 @@ export default function App() {
       unsubscribeStudentGroup?.();
       unsubscribeOrientadores?.();
       unsubscribeTeachers?.();
+      unsubscribeAuditLogs?.();
       unsubscribeSchools();
       unsubscribeDisputes();
     };
