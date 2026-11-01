@@ -1088,6 +1088,7 @@ export default function App() {
       );
     } catch (error) {
       console.error('No se pudo guardar el plantel en Firestore:', error);
+      throw new Error('No se pudo registrar el plantel en Firestore. Verifica los permisos y vuelve a intentarlo.');
     }
   };
 
@@ -1107,6 +1108,7 @@ export default function App() {
       );
     } catch (error) {
       console.error('No se pudieron guardar los parámetros del plantel en Firestore:', error);
+      throw new Error('No se pudieron guardar los cambios del plantel en Firestore.');
     }
   };
 
