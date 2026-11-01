@@ -100,6 +100,29 @@ export async function syncStudentAndGroupToCloud(student: Student, group: School
   await batch.commit();
 }
 
+/** Atomically save a student enrollment and keep both old and new group rosters consistent. */
+export async function syncStudentEnrollmentToCloud(student: Student, destinationGroup: SchoolGroup, previousGroup?: SchoolGroup) {
+  if (!student.schoolId || student.schoolId !== destinationGroup.schoolId || student.groupId !== destinationGroup.id) {
+    throw new Error('El alumno y el grupo destino deben pertenecer al mismo plantel.');
+  }
+  if (previousGroup && previousGroup.schoolId !== student.schoolId) {
+    throw new Error('El grupo anterior no pertenece al mismo plantel.');
+  }
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'students', student.id), student);
+  batch.set(doc(db, 'groups', destinationGroup.id), {
+    ...destinationGroup,
+    teacherIds: [...new Set(destinationGroup.schedule.map((slot) => slot.teacherId).filter(Boolean))]
+  }, { merge: true });
+  if (previousGroup && previousGroup.id !== destinationGroup.id) {
+    batch.set(doc(db, 'groups', previousGroup.id), {
+      ...previousGroup,
+      teacherIds: [...new Set(previousGroup.schedule.map((slot) => slot.teacherId).filter(Boolean))]
+    }, { merge: true });
+  }
+  await batch.commit();
+}
+
 /** Atomically import a roster and update its destination group in one Firestore batch. */
 export async function syncStudentsAndGroupToCloud(students: Student[], group: SchoolGroup) {
   if (students.length > 450) throw new Error('Importa máximo 450 alumnos por archivo para mantener la operación atómica.');
