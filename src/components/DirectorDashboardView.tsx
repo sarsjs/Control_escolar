@@ -77,7 +77,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
   onProvisionAccount,
   onUpdateDirectorGroup,
 }) => {
-  const [activeTab, setActiveTab] = useState<'matrix' | 'audit' | 'attendance' | 'groups' | 'disputes' | 'people'>('matrix');
+  const [activeTab, setActiveTab] = useState<'matrix' | 'audit' | 'attendance' | 'groups' | 'disputes' | 'people'>('people');
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [groupCreateError, setGroupCreateError] = useState<string>('');
   const [editingGroupId, setEditingGroupId] = useState('');
@@ -245,8 +245,8 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
 
       {/* Tabs */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-        <div className="border-b border-slate-200 px-6 flex items-center justify-between gap-4 overflow-x-auto bg-slate-50/70">
-          <div className="flex items-center gap-2 py-2">
+        <div className="border-b border-slate-200 px-3 sm:px-6 flex items-center justify-between gap-4 bg-slate-50/70">
+          <div className="flex flex-wrap items-center gap-2 py-2">
             <button
               type="button"
               onClick={() => setActiveTab('people')}
@@ -267,7 +267,7 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
               type="button"
               onClick={() => setActiveTab('attendance')}
               className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
-                activeTab === 'groups' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                activeTab === 'attendance' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Supervisión y Corrección de Asistencias
