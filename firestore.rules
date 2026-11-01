@@ -254,6 +254,7 @@ service cloud.firestore {
         || (resource.data.schoolId is string
           && canAccessSchool(resource.data.schoolId)
           && (profile().role == 'director'
+            || profile().role == 'orientador'
             || (profile().role == 'teacher'
               && profile().linkedEntityId == teacherId)));
       allow create: if isSuperAdmin()
