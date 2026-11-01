@@ -826,6 +826,21 @@ export default function App() {
     }
   };
 
+  const handleOrientadorUpdateStudent = async (input: Student) => {
+    if (currentUser?.role !== 'orientador' || !currentUser.schoolId || !currentOrientadorEntity) throw new Error('Solo orientación autenticada puede modificar alumnos.');
+    const existing = students.find((item) => item.id === input.id && item.schoolId === currentUser.schoolId);
+    if (!existing) throw new Error('No se encontró el alumno de este plantel.');
+    const group = groups.find((item) => item.id === existing.groupId && item.schoolId === currentUser.schoolId);
+    if (!group || (group.orientadorId !== currentOrientadorEntity.id && group.temporarySubstituteOrientadorId !== currentOrientadorEntity.id)) throw new Error('No tienes asignado este grupo.');
+    if (input.groupId !== existing.groupId || input.schoolId !== existing.schoolId) throw new Error('Orientación no puede mover alumnos entre grupos o planteles.');
+    const name = input.name.trim(), matricula = input.matricula.trim();
+    if (!name || !matricula) throw new Error('Nombre y matrícula son obligatorios.');
+    if (students.some((item) => item.id !== input.id && item.schoolId === currentUser.schoolId && item.matricula.trim().toLocaleLowerCase('es-MX') === matricula.toLocaleLowerCase('es-MX'))) throw new Error('La matrícula ya está registrada en este plantel.');
+    const record: Student = { ...existing, name, matricula, active: input.active !== false, lastUpdated: new Date().toISOString() };
+    await syncStudentToCloud(record);
+    setStudents((prev) => prev.map((item) => item.id === record.id ? record : item));
+  };
+
   // 13. Import students only after Firestore confirms each write.
   const handleImportStudentsCsv = async (groupId: string, csvData: { name: string; matricula: string; email?: string }[]) => {
     if (!currentUser?.schoolId || !['director', 'orientador'].includes(currentUser.role)) {
@@ -1086,6 +1101,7 @@ export default function App() {
             onCreateGroup={handleCreateGroupForOrientador}
             onUpdateGroupSchedule={handleUpdateGroupSchedule}
             onAddStudentToGroup={handleAddStudentToGroup}
+            onUpdateStudent={handleOrientadorUpdateStudent}
             onImportStudentsCsv={handleImportStudentsCsv}
             onSendAlertToStudent={(stId, stName) => {
               pushNotification(
