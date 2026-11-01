@@ -846,8 +846,7 @@ export default function App() {
   // 11. Orientador updates schedule
   const handleCreateGroupForOrientador = async (name: string, semester: number, turn: 'Matutino' | 'Vespertino') => {
     if (!currentOrientadorEntity || !currentUser?.schoolId) {
-      console.error('No se puede crear el grupo: falta vincular al orientador con un plantel real.');
-      return;
+      throw new Error('No se puede crear el grupo: falta vincular al orientador con un plantel real.');
     }
     const normalizedName = name.trim().toLocaleLowerCase('es-MX');
     const duplicate = groups.find((group) =>
@@ -857,10 +856,8 @@ export default function App() {
       && group.turn === turn
       && group.name.trim().toLocaleLowerCase('es-MX') === normalizedName
     );
-    if (duplicate) {
-      console.warn('No se creó el grupo: ya existe uno con el mismo semestre, nombre y turno.');
-      return;
-    }
+    if (duplicate) throw new Error('Ya existe un grupo con ese semestre, nombre y turno.');
+    if (!name.trim()) throw new Error('El nombre del grupo es obligatorio.');
     const newGroup: SchoolGroup = {
       id: `grp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name: name.trim(),
@@ -880,6 +877,7 @@ export default function App() {
         : orientador));
     } catch (error) {
       console.error('No se pudo guardar el grupo en Firestore:', error);
+      throw new Error('No se pudo guardar el grupo en Firestore. Verifica tus permisos y vuelve a intentarlo.');
     }
   };
 
