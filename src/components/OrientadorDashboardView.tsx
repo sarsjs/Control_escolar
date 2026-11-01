@@ -37,7 +37,6 @@ interface OrientadorDashboardViewProps {
   onAddStudentToGroup: (groupId: string, studentName: string, matricula: string) => Promise<void>;
   onUpdateStudent: (student: Student) => void;
   onImportStudentsCsv: (groupId: string, csvData: { name: string; matricula: string; email?: string }[]) => Promise<void>;
-  onSendAlertToStudent: (studentId: string, studentName: string) => void;
   onResolveDispute: (disputeId: string, approved: boolean, notes: string) => void;
 }
 
@@ -53,7 +52,6 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
   onAddStudentToGroup,
   onUpdateStudent,
   onImportStudentsCsv,
-  onSendAlertToStudent,
   onResolveDispute,
 }) => {
   // Only groups assigned to this orientador (or where they are substitute)
@@ -492,13 +490,9 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
                       <span className="font-semibold text-slate-900">
                         {st.name} — Ubicación detectada: {st.currentZone}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => onSendAlertToStudent(st.id, st.name)}
-                        className="text-[11px] font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded-md transition-colors"
-                      >
-                        Enviar Alerta al Teléfono
-                      </button>
+                      <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-md">
+                        Aviso al teléfono pendiente de integración
+                      </span>
                     </div>
                   ))}
                 </div>
