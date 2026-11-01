@@ -1,17 +1,18 @@
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../firebase';
 
-export type ProvisionableRole = 'orientador' | 'teacher' | 'student';
+export type ProvisionableRole = 'director' | 'orientador' | 'teacher' | 'student';
 
 export async function provisionSchoolAccount(input: {
   role: ProvisionableRole;
   schoolId: string;
-  linkedEntityId: string;
+  linkedEntityId?: string;
   email: string;
   name: string;
 }): Promise<void> {
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error('Tu sesión expiró. Inicia sesión nuevamente.');
+  const email = input.email.trim().toLowerCase();
   const token = await currentUser.getIdToken();
   const response = await fetch('/api/admin/provision-account', {
     method: 'POST',
@@ -19,7 +20,7 @@ export async function provisionSchoolAccount(input: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ ...input, email }),
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || result?.ok !== true) {
@@ -27,7 +28,7 @@ export async function provisionSchoolAccount(input: {
   }
 
   try {
-    await sendPasswordResetEmail(auth, input.email.trim().toLowerCase());
+    await sendPasswordResetEmail(auth, email);
   } catch {
     throw new Error('La cuenta quedó creada y vinculada, pero Firebase no pudo enviar el correo de configuración. Verifica el dominio autorizado y usa la recuperación de contraseña para reenviarlo.');
   }
