@@ -44,7 +44,7 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
     ) || activeGroup.schedule[0];
 
   // STRICT REQUIREMENT: Only students belonging to this group!
-  const groupStudents = students.filter((s) => s.groupId === activeGroup.id);
+  const groupStudents = students.filter((student) => student.groupId === activeGroup.id && student.active !== false);
 
   const inClassStudents = groupStudents.filter((s) => s.currentStatus === 'in_class');
   const onCampusOutsideStudents = groupStudents.filter((s) => s.currentStatus === 'on_campus_not_in_class');
