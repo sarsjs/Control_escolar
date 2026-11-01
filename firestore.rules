@@ -74,6 +74,18 @@ service cloud.firestore {
       return canManageAssignedStudent(schoolId, groupId);
     }
 
+    function canManageAssignedTeacherGroup(schoolId, groupId) {
+      return canAccessSchool(schoolId)
+        && profile().role == 'teacher'
+        && groupId is string
+        && exists(/databases/$(database)/documents/groups/$(groupId))
+        && get(/databases/$(database)/documents/groups/$(groupId)).data.schoolId == schoolId
+        && get(/databases/$(database)/documents/groups/$(groupId)).data.teacherIds is list
+        && ((profile().linkedEntityId is string
+            && get(/databases/$(database)/documents/groups/$(groupId)).data.teacherIds.hasAny([profile().linkedEntityId]))
+          || get(/databases/$(database)/documents/groups/$(groupId)).data.teacherIds.hasAny([request.auth.uid]));
+    }
+
     // Users may read their own profile. Only the superadmin may provision or
     // change other profiles; the initial owner bootstrap is narrowly constrained.
     match /users/{userId} {
@@ -130,6 +142,14 @@ service cloud.firestore {
           && request.resource.data.schoolId == resource.data.schoolId
           && request.resource.data.groupId == resource.data.groupId
           && canManageAssignedStudent(resource.data.schoolId, resource.data.groupId));
+        || (resource.data.schoolId is string
+          && request.resource.data.schoolId == resource.data.schoolId
+          && request.resource.data.groupId == resource.data.groupId
+          && canManageAssignedTeacherGroup(resource.data.schoolId, resource.data.groupId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['currentStatus', 'validatedVia', 'validatedAt', 'lastUpdated'])
+          && request.resource.data.currentStatus == 'in_class'
+          && request.resource.data.validatedVia == 'teacher_manual');
       allow delete: if isSuperAdmin()
         || (resource.data.schoolId is string
           && canAccessSchool(resource.data.schoolId)
@@ -214,6 +234,12 @@ service cloud.firestore {
           && request.resource.data.modifiedByRole == profile().role
           && request.resource.data.studentId is string
           && request.resource.data.groupId is string
+          && request.resource.data.reason is string)
+        || (request.resource.data.schoolId is string
+          && canManageAssignedTeacherGroup(request.resource.data.schoolId, request.resource.data.groupId)
+          && request.resource.data.modifiedById == request.auth.uid
+          && request.resource.data.modifiedByRole == 'teacher'
+          && request.resource.data.newStatus == 'in_class'
           && request.resource.data.reason is string);
       allow update, delete: if false;
     }
