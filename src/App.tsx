@@ -614,7 +614,7 @@ export default function App() {
     if (duplicateMatricula) throw new Error('La matrícula ya está registrada en este plantel.');
     const existing = students.find((item) => item.id === id);
     const record: Student = { id, schoolId: currentUser.schoolId, name, matricula, ...(email ? { email } : {}), groupId: input.groupId, avatar: existing?.avatar || '', currentStatus: existing?.currentStatus || 'outside_school', currentZone: existing?.currentZone || 'unknown', distanceToCampusMeters: existing?.distanceToCampusMeters || 0, lastUpdated: new Date().toISOString(), active: existing?.active !== false };
-    const oldGroup = groups.find((item => item.id === existing?.groupId && item.schoolId === currentUser.schoolId));
+    const oldGroup = groups.find((item) => item.id === existing?.groupId && item.schoolId === currentUser.schoolId));
     const updatedOldGroup = oldGroup && oldGroup.id !== group.id
       ? { ...oldGroup, studentIds: oldGroup.studentIds.filter((studentId) => studentId !== id) }
       : undefined;
