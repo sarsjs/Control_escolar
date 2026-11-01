@@ -240,7 +240,10 @@ service cloud.firestore {
           && request.resource.data.modifiedById == request.auth.uid
           && request.resource.data.modifiedByRole == 'teacher'
           && request.resource.data.newStatus == 'in_class'
-          && request.resource.data.reason is string);
+          && request.resource.data.reason is string
+          && exists(/databases/$(database)/documents/students/$(request.resource.data.studentId))
+          && get(/databases/$(database)/documents/students/$(request.resource.data.studentId)).data.schoolId == request.resource.data.schoolId
+          && get(/databases/$(database)/documents/students/$(request.resource.data.studentId)).data.groupId == request.resource.data.groupId);
       allow update, delete: if false;
     }
 
