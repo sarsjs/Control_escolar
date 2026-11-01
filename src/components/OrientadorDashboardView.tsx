@@ -56,14 +56,15 @@ export const OrientadorDashboardView: React.FC<OrientadorDashboardViewProps> = (
 }) => {
   // Only groups assigned to this orientador (or where they are substitute)
   const myGroups = allGroups.filter(
-    (g) => g.orientadorId === orientador.id || g.temporarySubstituteOrientadorId === orientador.id
+    (group) => group.active !== false
+      && (group.orientadorId === orientador.id || group.temporarySubstituteOrientadorId === orientador.id)
   );
   // Never offer teachers from another school or inactive teacher records.
   const activeTeachers = allTeachers.filter(
     (teacher) => teacher.schoolId === orientador.schoolId && teacher.active !== false
   );
   const [selectedGroupId, setSelectedGroupId] = useState<string>(
-    myGroups[0]?.id || allGroups[0]?.id || ''
+    myGroups[0]?.id || ''
   );
   const [activeTab, setActiveTab] = useState<'attendance' | 'schedule' | 'students' | 'disputes' | 'map'>('attendance');
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
