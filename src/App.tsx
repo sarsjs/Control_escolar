@@ -235,11 +235,13 @@ export default function App() {
         }
       });
     } else {
+      if (currentUser.role === 'director' || currentUser.role === 'orientador') {
+        setTeachers([]);
+        unsubscribeTeachers = subscribeToTeachers(currentUser.schoolId, (items) => setTeachers(items));
+      }
       if (currentUser.role === 'director') {
         setOrientadores([]);
-        setTeachers([]);
         unsubscribeOrientadores = subscribeToOrientadores(currentUser.schoolId, (items) => setOrientadores(items));
-        unsubscribeTeachers = subscribeToTeachers(currentUser.schoolId, (items) => setTeachers(items));
       }
       unsubscribeStudents = subscribeToStudents(currentUser.schoolId, isSuperAdmin, (cloudStudents) => {
         setStudents(cloudStudents);
