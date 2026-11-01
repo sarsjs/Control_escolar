@@ -599,7 +599,7 @@ export default function App() {
     const matricula = input.matricula.trim();
     const email = input.email.trim().toLowerCase();
     if (!name || !matricula) throw new Error('El nombre y la matrícula son obligatorios.');
-    if (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error('El correo electrónico no tiene un formato válido.');
+    if (email && !/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(email)) throw new Error('El correo electrónico no tiene un formato válido.');
     const id = input.id || `stu-${Date.now()}`;
     const duplicateMatricula = students.find((item) =>
       item.schoolId === currentUser.schoolId
@@ -817,7 +817,7 @@ export default function App() {
     for (const row of cleanRows) {
       const key = row.matricula.toLocaleLowerCase('es-MX');
       if (!row.name || !row.matricula) throw new Error('Cada fila debe tener nombre y matrícula.');
-      if (row.email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(row.email)) throw new Error('El correo de ' + row.name + ' no tiene un formato válido.');
+      if (row.email && !/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(row.email)) throw new Error('El correo de ' + row.name + ' no tiene un formato válido.');
       if (seen.has(key)) throw new Error('El archivo contiene matrículas repetidas.');
       if (existingMatriculas.has(key)) throw new Error('La matrícula ' + row.matricula + ' ya está registrada en el plantel.');
       seen.add(key);
