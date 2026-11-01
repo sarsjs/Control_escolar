@@ -319,17 +319,17 @@ export const StudentAppView: React.FC<StudentAppViewProps> = ({
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-amber-800">
-                  Llegada al Plantel Detectada
+                  Registro de presencia en plantel
                 </span>
                 <span className="text-[11px] font-mono text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-bold">
-                  En Perímetro Escolar
+                  GPS automático pendiente
                 </span>
               </div>
               <h3 className="text-lg font-bold text-slate-900 mt-0.5">
-                Has llegado al plantel. Recuerda que todavía necesitas confirmar tu presencia en tu salón de clase
+                El registro actual indica presencia en el plantel. Todavía falta confirmar tu presencia en el salón de clase
               </h3>
               <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                El perímetro escolar confirma tu presencia física en las instalaciones. Sin embargo, tu clase de <strong className="text-slate-800">{activeClass?.subjectName}</strong> en <strong className="text-slate-800">{activeClass?.classroom}</strong> ya inició. La llegada al plantel no te marca automáticamente como asistente.
+                Este estado aún no está respaldado por una verificación GPS automática. Tu clase de <strong className="text-slate-800">{activeClass?.subjectName}</strong> en <strong className="text-slate-800">{activeClass?.classroom}</strong> ya inició. La llegada al plantel no te marca automáticamente como asistente.
               </p>
             </div>
           </div>
