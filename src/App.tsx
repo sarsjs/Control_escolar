@@ -1273,15 +1273,6 @@ export default function App() {
             onAddStudentToGroup={handleAddStudentToGroup}
             onUpdateStudent={handleOrientadorUpdateStudent}
             onImportStudentsCsv={handleImportStudentsCsv}
-            onSendAlertToStudent={(stId, stName) => {
-              pushNotification(
-                'class_unattended',
-                `Aviso de Orientación a ${stName}`,
-                `El Orientador ${currentOrientadorEntity.name} solicita tu presencia inmediata en el salón de clase.`,
-                'student',
-                { studentId: stId, actionRequired: true }
-              );
-            }}
             onResolveDispute={handleResolveDispute}
           />
         )}
@@ -1294,15 +1285,6 @@ export default function App() {
             allTeacherGroups={teacherAssignedGroups}
             students={students}
             onSelectGroup={setActiveTeacherGroup}
-            onSendStudentAlert={(stId, stName) => {
-              pushNotification(
-                'class_unattended',
-                `Aviso del Docente a ${stName}`,
-                `El docente solicita tu presencia inmediata en el aula.`,
-                'student',
-                { studentId: stId, actionRequired: true }
-              );
-            }}
             onManualValidateStudent={handleTeacherManualValidate}
           />
         )}
